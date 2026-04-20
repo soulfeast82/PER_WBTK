@@ -396,6 +396,13 @@ class WBTK_PT_Structures(WBTK_PanelBase):
             sk.label(text="A=add  S=stack  D=dupe  X=delete")
             sk.label(text="G=generate  I=iso  RClick=menu")
 
+        # --- Cleanup (destructive, always visible in the Build Mode section) ---
+        box_bm.separator(factor=2.0)
+        row_cleanup = box_bm.row()
+        row_cleanup.alert = True
+        row_cleanup.operator("wbtk.bm_cleanup_helpers",
+                             text="Cleanup All Helpers", icon='TRASH')
+
         # --- Block Composer (Phase 2) ---
         box_block = layout.box()
         box_block.label(text="Block Composer", icon='GROUP')

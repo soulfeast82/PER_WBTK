@@ -172,9 +172,16 @@ def _start_timer():
 
 
 def _stop_timer():
-    """Stop the timer (it self-stops when active=False)."""
+    """Stop the timer immediately if registered; flag inactive as a backstop."""
+    # Flip the active flag first so any in-flight tick bails out.
     _live_state['active'] = False
-    # Timer will unregister itself on next tick by returning None
+    # Explicit unregister so addon teardown doesn't race a pending callback.
+    try:
+        if bpy.app.timers.is_registered(_live_preview_timer):
+            bpy.app.timers.unregister(_live_preview_timer)
+    except Exception:
+        pass
+    _live_state['timer_running'] = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────

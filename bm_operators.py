@@ -416,6 +416,91 @@ class OP_Generate(bpy.types.Operator):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  CLEANUP — destructive safety net for orphaned WBTK helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+class OP_CleanupHelpers(bpy.types.Operator):
+    """Remove all WBTK Build Mode blocks, detail stamps, grids, live preview, and their empty collections"""
+    bl_idname = "wbtk.bm_cleanup_helpers"
+    bl_label = "Cleanup All Helpers"
+    bl_options = {'REGISTER'}
+
+    # Prefixes and exact names that identify WBTK helper objects.
+    _OBJ_PREFIXES = ("WBTK_BM_", "WBTK_DTL_", "_WBTK_")
+    _OBJ_EXACT    = ("WBTK_Live_Preview",)
+    _MESH_EXACT   = ("WBTK_Live_Preview_Mesh",)
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_confirm(
+            self, event,
+            message="Remove all Build Mode blocks, details, grids, and helper objects? "
+                    "This cannot be undone.")
+
+    def execute(self, context):
+        from . import bm_details as _bmd
+        from . import operators_live_preview as _olp
+
+        scene = context.scene
+        was_active = getattr(scene, 'wbtk_bm_active', False)
+
+        # Stop the live preview timer first so it cannot recreate the
+        # WBTK_Live_Preview object we're about to delete.
+        try:
+            _olp.cleanup()
+        except Exception as e:
+            print(f"WBTK Cleanup: live preview cleanup failed: {e}")
+
+        collections_to_try = (bm_data.COLLECTION_NAME, _bmd.DETAIL_COLLECTION)
+
+        # 1) Objects by prefix or exact name.
+        obj_count = 0
+        for obj in list(bpy.data.objects):
+            name = obj.name
+            if name.startswith(self._OBJ_PREFIXES) or name in self._OBJ_EXACT:
+                try:
+                    bpy.data.objects.remove(obj, do_unlink=True)
+                    obj_count += 1
+                except Exception as e:
+                    print(f"WBTK Cleanup: could not remove object '{name}': {e}")
+
+        # 2) Orphan meshes by exact name (catches datablocks whose owning
+        #    object was removed earlier or never existed).
+        for me in list(bpy.data.meshes):
+            if me.name in self._MESH_EXACT and me.users == 0:
+                try:
+                    bpy.data.meshes.remove(me)
+                except Exception as e:
+                    print(f"WBTK Cleanup: could not remove mesh '{me.name}': {e}")
+
+        # 3) Empty WBTK helper collections.
+        col_count = 0
+        for col_name in collections_to_try:
+            col = bpy.data.collections.get(col_name)
+            if col and len(col.objects) == 0 and len(col.children) == 0:
+                try:
+                    bpy.data.collections.remove(col)
+                    col_count += 1
+                except Exception as e:
+                    print(f"WBTK Cleanup: could not remove collection '{col_name}': {e}")
+
+        # 4) Auto-exit Build Mode if it was active at the start of cleanup.
+        #    Mirrors OP_ToggleMode's exit path so the user lands in a clean
+        #    known-off state instead of a half-state (mode on, grid gone).
+        if was_active:
+            try:
+                scene.wbtk_bm_active = False
+                bm_data.destroy_grid()
+            except Exception as e:
+                print(f"WBTK Cleanup: auto-exit Build Mode failed: {e}")
+
+        msg = f"Cleanup complete: removed {obj_count} objects, {col_count} collections"
+        if was_active:
+            msg += ". Build Mode exited."
+        self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 
 _classes = (
     OP_ToggleMode,
@@ -432,4 +517,5 @@ _classes = (
     OP_ClearAll,
     OP_IsoView,
     OP_Generate,
+    OP_CleanupHelpers,
 )
