@@ -31,7 +31,8 @@ class OP_BaseGenerator(bpy.types.Operator):
     def get_styles(self, context):
         """ Convenience method to get current style settings from context. """
         # Assumes properties are named wbtk_walkway_style, wbtk_rail_style
-        return context.scene.wbtk_walkway_style, context.scene.wbtk_rail_style
+        return (getattr(context.scene, 'wbtk_walkway_style', 'SOLID'),
+                getattr(context.scene, 'wbtk_rail_style', 'ROUND'))
 
     def create_and_parent(self, bm, name, loc, material_name, master):
         """ Helper: Converts BMesh, links, parents, adds UCX. Returns the new object or None. """
@@ -51,9 +52,9 @@ class OP_BridgeChunk(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixed property names
-        length_tiles = scene.wbtk_br_len
-        width_tiles = scene.wbtk_br_wid
-        rail_type = scene.wbtk_br_rail
+        length_tiles = getattr(scene, 'wbtk_br_len', 10)
+        width_tiles = getattr(scene, 'wbtk_br_wid', 2)
+        rail_type = getattr(scene, 'wbtk_br_rail', Config.RAIL_BOTH)
         walkway_style, rail_style = self.get_styles(context)
 
         if length_tiles <= 0 or width_tiles <= 0:
@@ -114,9 +115,9 @@ class OP_StraightRailing(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixed property names
-        length_tiles = scene.wbtk_sr_len
-        use_chunks = scene.wbtk_sr_chunk
-        rail_type = scene.wbtk_sr_rail
+        length_tiles = getattr(scene, 'wbtk_sr_len', 5)
+        use_chunks = getattr(scene, 'wbtk_sr_chunk', True)
+        rail_type = getattr(scene, 'wbtk_sr_rail', Config.RAIL_LEFT)
         walkway_style, rail_style = self.get_styles(context)
 
         if length_tiles <= 0:
@@ -167,10 +168,10 @@ class OP_CornerRailing(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixed property names
-        len1_tiles = scene.wbtk_cr_len1 # X-leg
-        len2_tiles = scene.wbtk_cr_len2 # Y-leg
-        use_chunks = scene.wbtk_cr_chunk
-        rail_type = scene.wbtk_cr_rail
+        len1_tiles = getattr(scene, 'wbtk_cr_len1', 5) # X-leg
+        len2_tiles = getattr(scene, 'wbtk_cr_len2', 5) # Y-leg
+        use_chunks = getattr(scene, 'wbtk_cr_chunk', True)
+        rail_type = getattr(scene, 'wbtk_cr_rail', Config.RAIL_OUTER)
         walkway_style, rail_style = self.get_styles(context)
 
         if len1_tiles <= 0 or len2_tiles <= 0:
@@ -267,10 +268,10 @@ class OP_TJunctionRailing(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixes
-        main_len_tiles = scene.wbtk_tr_len1
-        branch_len_tiles = scene.wbtk_tr_len2
+        main_len_tiles = getattr(scene, 'wbtk_tr_len1', 5)
+        branch_len_tiles = getattr(scene, 'wbtk_tr_len2', 5)
         # use_chunks = scene.wbtk_tr_chunk # Chunking still TBD for T-Junction
-        rail_type = scene.wbtk_tr_rail
+        rail_type = getattr(scene, 'wbtk_tr_rail', Config.RAIL_OUTER)
         walkway_style, rail_style = self.get_styles(context)
 
         if main_len_tiles < 3:
@@ -375,8 +376,8 @@ class OP_XJunctionRailing(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixes
-        arm_size_tiles = scene.wbtk_xj_size # N
-        rail_type = scene.wbtk_xj_rail
+        arm_size_tiles = getattr(scene, 'wbtk_xj_size', 1) # N
+        rail_type = getattr(scene, 'wbtk_xj_rail', Config.RAIL_OUTER)
         walkway_style, rail_style = self.get_styles(context)
 
         if arm_size_tiles < 1:
@@ -497,8 +498,8 @@ class OP_StraightEndcap(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ straight railing props
-        length_tiles = scene.wbtk_sr_len
-        rail_type = scene.wbtk_sr_rail
+        length_tiles = getattr(scene, 'wbtk_sr_len', 5)
+        rail_type = getattr(scene, 'wbtk_sr_rail', Config.RAIL_LEFT)
         walkway_style, rail_style = self.get_styles(context)
 
         if length_tiles <= 0:
@@ -547,9 +548,9 @@ class OP_Ladder(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixes
-        height_meters = scene.wbtk_ld_height
-        num_rungs = scene.wbtk_ld_steps
-        add_side_rails = scene.wbtk_ld_rail
+        height_meters = getattr(scene, 'wbtk_ld_height', 3.0)
+        num_rungs = getattr(scene, 'wbtk_ld_steps', 10)
+        add_side_rails = getattr(scene, 'wbtk_ld_rail', True)
         _, rail_style = self.get_styles(context) # Use global rail style for sides
         rung_radius = Config.LADDER_RUNG_RADIUS # Use specific rung radius
 
@@ -597,11 +598,11 @@ class OP_StairsRailing(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixes
-        run_meters = scene.wbtk_st_run
-        rise_meters = scene.wbtk_st_rise
-        width_tiles = scene.wbtk_st_width
-        rail_type = scene.wbtk_st_rail
-        num_intermediate = scene.wbtk_st_intermediate_posts
+        run_meters = getattr(scene, 'wbtk_st_run', 4.0)
+        rise_meters = getattr(scene, 'wbtk_st_rise', 2.0)
+        width_tiles = getattr(scene, 'wbtk_st_width', 1)
+        rail_type = getattr(scene, 'wbtk_st_rail', Config.RAIL_BOTH)
+        num_intermediate = getattr(scene, 'wbtk_st_ramp_intermediate_posts', 0)
         walkway_style, rail_style = self.get_styles(context)
 
         if run_meters <= 0 or rise_meters <= 0 or width_tiles <= 0:
@@ -654,12 +655,12 @@ class OP_DiscreteStairs(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixes
-        total_run = scene.wbtk_ds_run
-        total_rise = scene.wbtk_ds_rise
-        width_tiles = scene.wbtk_ds_width_steps
-        step_count = scene.wbtk_ds_step_count
-        rail_type = scene.wbtk_ds_rail
-        num_intermediate = scene.wbtk_st_discrete_intermediate_posts
+        total_run = getattr(scene, 'wbtk_ds_run', 4.0)
+        total_rise = getattr(scene, 'wbtk_ds_rise', 2.0)
+        width_tiles = getattr(scene, 'wbtk_ds_width_steps', 1)
+        step_count = getattr(scene, 'wbtk_ds_step_count', 10)
+        rail_type = getattr(scene, 'wbtk_ds_rail', Config.RAIL_BOTH)
+        num_intermediate = getattr(scene, 'wbtk_st_discrete_intermediate_posts', 0)
         walkway_style, rail_style = self.get_styles(context)
         
         if total_run <= 0 or total_rise <= 0 or width_tiles <= 0 or step_count <= 0:

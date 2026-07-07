@@ -38,10 +38,15 @@ Location in Blender: View3D > Sidebar > World Builder
   only the intended lines, `py_compile` clean ×4, zero raw reads remain in
   the four files. **Viewport smoke test passed 2026-07-07; committed same
   day (backups removed).**
-- 🔲 **Session 5c — RECOVERY SWEEP (new):** the missing 4a/4b/5a work.
-  Audited raw crash-surface reads remaining: cables 24, foliage 31, pipes 41,
-  walkways 33 (+ ramp-stairs crash fix), props 21, structures 36,
-  block_composer 4, ui.py 24 → **214 raw reads total.**
+- 🔄 **Session 5c — RECOVERY SWEEP (in progress):** the missing 4a/4b/5a work.
+  - ✅ Sitting 1 (2026-07-07): `operators_walkways.py` — 33 reads converted
+    **+ ramp-stairs crash fix** (line 604 → `wbtk_st_ramp_intermediate_posts`).
+    Three-lens adversarial verification passed (defaults exact incl.
+    Config.RAIL_* symbols; diff clean; fix consistent with properties.py,
+    ui.py, geometry_walkways.py). `py_compile` clean. **Viewport smoke test
+    passed + committed 2026-07-07** (via the new addon junction).
+  - 🔲 Remaining raw crash-surface reads: pipes 41, foliage 31, cables 24,
+    props 21, structures 36, block_composer 4, ui.py 24 → **181 reads.**
 - 🔲 **Session 6** — Wall style enum drop + Build Mode behavioral pass +
   accumulated fixes
 - 🔲 **Session 7** — Detail stamps behavioral pass
@@ -61,11 +66,12 @@ previous doc was fiction; the WorkingFiles clone is stale at `580edff`.
 
 ## Known LIVE bugs (census 2026-07-06 — fix in Session 5c/6)
 
-1. **Generate Ramp Stairs crashes.** `operators_walkways.py:604` reads
-   `scene.wbtk_st_intermediate_posts`, which does not exist —
-   properties.py:84 defines only `wbtk_st_ramp_intermediate_posts`.
-   `OP_StairsRailing` raises AttributeError every run. One-line rename fix.
-   (Previous doc claimed this shipped in "Session 4b" — it did not.)
+1. ~~**Generate Ramp Stairs crashes.**~~ **CLOSED 2026-07-07 (5c sitting 1):**
+   `operators_walkways.py` now reads `wbtk_st_ramp_intermediate_posts` (the
+   property properties.py:84 actually defines). Verified consistent with
+   ui.py:96 and `create_angled_rails_bmesh`; **viewport-verified and
+   committed.** (Previous doc claimed this shipped in "Session 4b" — it
+   had not.) Release note: "Ramp stairs no longer crash on Generate."
 2. **`set_sharp_from_angle` called positionally** at
    `operators_props.py:277` and `operators_structures.py:164`
    (hasattr-wrapped, so no crash on old Blender, but the previous doc says
@@ -187,6 +193,19 @@ WBTK = the Project Earl Ray brain:
 5. **PANELED/RIBBED/TILED: confirmed cancelled** — Session 6's enum drop
    stands; wall styles are module kits now, not code.
 
+### Evolution Clause (locked 2026-07-07)
+
+Long-term, WBTK forks Buildify's node groups into its own asset library
+("ER-BFY", WBTK_BuildingCore.blend) and caters them to Project Earl Ray:
+2m grid + Scale Bible defaults, Region DNA as modifier-level district
+inputs, Dusk Ward floor-material verticality, sloped-roof and sign node
+groups as needed, game-export-aware realize path.
+
+**Rule: fork when forced by a concrete need stock Buildify can't serve —
+never preemptively.** Until then, the integration arc runs on stock
+Buildify 1.0 (frozen upstream; license check required only if WBTK ever
+ships publicly with forked nodes).
+
 ---
 
 ## Build Mode architecture (primary path)
@@ -279,6 +298,13 @@ SIGN_MOUNT, ANTENNA, CANOPY.
   confirmation before stacking risky changes.
 - Model policy: sweep sessions default to Opus; escalate to Fable only
   after two failed attempts on the same problem.
+- **Deploy setup (2026-07-07):** Blender loads this addon via a directory
+  junction — `%APPDATA%\Blender Foundation\Blender\5.1\scripts\addons\PER_WBTK`
+  → this repo folder. Edits here are live in Blender after a restart /
+  Reload Scripts; there is NO separate installed copy to sync. (The old
+  installed copy caused the 2026-07-07 stale-smoke-test incident and is
+  the likely mechanism that lost the 4a/4b/5a work. Never reinstall from
+  zip over the junction.)
 
 ---
 
@@ -548,7 +574,7 @@ v1.0.0 is ready to ship when:
 - Parametric Shape Generator works for all 5 shapes + 6 enhancements
 - Block Composer generates city blocks without crashing
 - Read sweep complete (Sessions 2, 5b, 5c) — zero raw crash-surface reads
-- Ramp-stairs crash fixed and viewport-verified (Session 5c)
+- Ramp-stairs crash fixed and viewport-verified (Session 5c ✅ 2026-07-07)
 - `set_sharp_from_angle` keyword conversions verified on Blender 5.0
 - Unregister path clean (Session 3 ✅)
 - "Cleanup All Helpers" operator available (Session 3 ✅)
