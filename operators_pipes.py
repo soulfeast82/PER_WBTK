@@ -32,10 +32,10 @@ def _get_wear_values(preset, scene):
         return 1.0, 1.0, 0.6, 4
     else:  # CUSTOM
         return (
-            scene.wbtk_pipe_dent_intensity,
-            scene.wbtk_pipe_roughness,
-            scene.wbtk_pipe_corrosion,
-            scene.wbtk_pipe_drip_count,
+            getattr(scene, 'wbtk_pipe_dent_intensity', 0.3),
+            getattr(scene, 'wbtk_pipe_roughness', 0.4),
+            getattr(scene, 'wbtk_pipe_corrosion', 0.0),
+            getattr(scene, 'wbtk_pipe_drip_count', 2),
         )
 
 
@@ -52,20 +52,20 @@ class OP_GenerateStraightPipe(OP_BaseGenerator):
         scene = context.scene
 
         # --- Read properties ---
-        length      = scene.wbtk_pipe_length
-        radius      = scene.wbtk_pipe_radius
-        wall_thick  = scene.wbtk_pipe_wall_thickness
-        segments    = scene.wbtk_pipe_segments
-        subdivs     = scene.wbtk_pipe_subdivisions
-        axis        = scene.wbtk_pipe_axis
+        length      = getattr(scene, 'wbtk_pipe_length', 4.0)
+        radius      = getattr(scene, 'wbtk_pipe_radius', 0.08)
+        wall_thick  = getattr(scene, 'wbtk_pipe_wall_thickness', 0.01)
+        segments    = getattr(scene, 'wbtk_pipe_segments', 16)
+        subdivs     = getattr(scene, 'wbtk_pipe_subdivisions', 8)
+        axis        = getattr(scene, 'wbtk_pipe_axis', 'X')
 
-        add_flanges     = scene.wbtk_pipe_add_flanges
-        flange_spacing  = scene.wbtk_pipe_flange_spacing
-        add_clamps      = scene.wbtk_pipe_add_clamps
-        clamp_spacing   = scene.wbtk_pipe_clamp_spacing
+        add_flanges     = getattr(scene, 'wbtk_pipe_add_flanges', True)
+        flange_spacing  = getattr(scene, 'wbtk_pipe_flange_spacing', 2.0)
+        add_clamps      = getattr(scene, 'wbtk_pipe_add_clamps', True)
+        clamp_spacing   = getattr(scene, 'wbtk_pipe_clamp_spacing', 1.5)
 
-        wear_preset = scene.wbtk_pipe_wear_preset
-        wear_seed   = scene.wbtk_pipe_wear_seed
+        wear_preset = getattr(scene, 'wbtk_pipe_wear_preset', 'WEATHERED')
+        wear_seed   = getattr(scene, 'wbtk_pipe_wear_seed', 12345)
 
         dent_int, roughness, corrosion, drip_count = _get_wear_values(wear_preset, scene)
 
@@ -176,21 +176,21 @@ class OP_GeneratePipeRun(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
 
-        length1     = scene.wbtk_pipe_run_leg1
-        length2     = scene.wbtk_pipe_run_leg2
-        radius      = scene.wbtk_pipe_radius
-        wall_thick  = scene.wbtk_pipe_wall_thickness
-        segments    = scene.wbtk_pipe_segments
-        subdivs     = scene.wbtk_pipe_subdivisions
-        bend_plane  = scene.wbtk_pipe_run_bend_plane
-        bend_radius = scene.wbtk_pipe_run_bend_radius
+        length1     = getattr(scene, 'wbtk_pipe_run_leg1', 3.0)
+        length2     = getattr(scene, 'wbtk_pipe_run_leg2', 2.0)
+        radius      = getattr(scene, 'wbtk_pipe_radius', 0.08)
+        wall_thick  = getattr(scene, 'wbtk_pipe_wall_thickness', 0.01)
+        segments    = getattr(scene, 'wbtk_pipe_segments', 16)
+        subdivs     = getattr(scene, 'wbtk_pipe_subdivisions', 8)
+        bend_plane  = getattr(scene, 'wbtk_pipe_run_bend_plane', 'XZ')
+        bend_radius = getattr(scene, 'wbtk_pipe_run_bend_radius', 0.2)
 
-        wear_preset = scene.wbtk_pipe_wear_preset
-        wear_seed   = scene.wbtk_pipe_wear_seed
+        wear_preset = getattr(scene, 'wbtk_pipe_wear_preset', 'WEATHERED')
+        wear_seed   = getattr(scene, 'wbtk_pipe_wear_seed', 12345)
         dent_int, roughness, corrosion, drip_count = _get_wear_values(wear_preset, scene)
 
-        add_flanges    = scene.wbtk_pipe_add_flanges
-        flange_spacing = scene.wbtk_pipe_flange_spacing
+        add_flanges    = getattr(scene, 'wbtk_pipe_add_flanges', True)
+        flange_spacing = getattr(scene, 'wbtk_pipe_flange_spacing', 2.0)
 
         if radius <= wall_thick:
             return self.report_warning("Pipe radius must be greater than wall thickness.")
@@ -291,21 +291,21 @@ class OP_GeneratePipeBundle(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
 
-        bundle_count = scene.wbtk_pipe_bundle_count
-        length       = scene.wbtk_pipe_length
-        radius       = scene.wbtk_pipe_radius
-        wall_thick   = scene.wbtk_pipe_wall_thickness
-        segments     = scene.wbtk_pipe_segments
-        subdivs      = scene.wbtk_pipe_subdivisions
-        axis         = scene.wbtk_pipe_axis
-        bundle_spread = scene.wbtk_pipe_bundle_spread
+        bundle_count = getattr(scene, 'wbtk_pipe_bundle_count', 3)
+        length       = getattr(scene, 'wbtk_pipe_length', 4.0)
+        radius       = getattr(scene, 'wbtk_pipe_radius', 0.08)
+        wall_thick   = getattr(scene, 'wbtk_pipe_wall_thickness', 0.01)
+        segments     = getattr(scene, 'wbtk_pipe_segments', 16)
+        subdivs      = getattr(scene, 'wbtk_pipe_subdivisions', 8)
+        axis         = getattr(scene, 'wbtk_pipe_axis', 'X')
+        bundle_spread = getattr(scene, 'wbtk_pipe_bundle_spread', 0.3)
 
-        wear_preset = scene.wbtk_pipe_wear_preset
-        wear_seed   = scene.wbtk_pipe_wear_seed
+        wear_preset = getattr(scene, 'wbtk_pipe_wear_preset', 'WEATHERED')
+        wear_seed   = getattr(scene, 'wbtk_pipe_wear_seed', 12345)
         dent_int, roughness, corrosion, drip_count = _get_wear_values(wear_preset, scene)
 
-        add_flanges    = scene.wbtk_pipe_add_flanges
-        flange_spacing = scene.wbtk_pipe_flange_spacing
+        add_flanges    = getattr(scene, 'wbtk_pipe_add_flanges', True)
+        flange_spacing = getattr(scene, 'wbtk_pipe_flange_spacing', 2.0)
 
         if bundle_count < 1:
             return self.report_warning("Bundle count must be >= 1.")
@@ -398,7 +398,7 @@ class OP_RandomizePipeSeed(OP_BaseGenerator):
 
     def execute(self, context):
         context.scene.wbtk_pipe_wear_seed = random.randint(1, 99999)
-        self.report({'INFO'}, f"WBTK: New pipe seed = {context.scene.wbtk_pipe_wear_seed}")
+        self.report({'INFO'}, f"WBTK: New pipe seed = {getattr(context.scene, 'wbtk_pipe_wear_seed', 12345)}")
         return {'FINISHED'}
 
 

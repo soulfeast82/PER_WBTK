@@ -45,8 +45,13 @@ Location in Blender: View3D > Sidebar > World Builder
     Config.RAIL_* symbols; diff clean; fix consistent with properties.py,
     ui.py, geometry_walkways.py). `py_compile` clean. **Viewport smoke test
     passed + committed 2026-07-07** (via the new addon junction).
-  - 🔲 Remaining raw crash-surface reads: pipes 41, foliage 31, cables 24,
-    props 21, structures 36, block_composer 4, ui.py 24 → **181 reads.**
+  - ✅ Sitting 2 (2026-07-07): `operators_pipes.py` — 41 reads converted
+    (wear helper, straight, run, bundle, randomize f-string). Three-lens
+    verification passed; `py_compile` clean; L400 seed write + dead 'YZ'
+    branch left for Session 6 as planned. **Smoke-tested + committed
+    2026-07-07.**
+  - 🔲 Remaining raw crash-surface reads: foliage 31, cables 24,
+    props 21, structures 36, block_composer 4, ui.py 24 → **140 reads.**
 - 🔲 **Session 6** — Wall style enum drop + Build Mode behavioral pass +
   accumulated fixes
 - 🔲 **Session 7** — Detail stamps behavioral pass
@@ -477,6 +482,8 @@ session start).
 - Wear Layer (vertex color from geometry analysis) — Phase 4/5
 - Trim Sheet Intelligence (aspect-ratio-aware UV per face) — Phase 5
 - Object-first unified editor flow — v1.1+ design exploration
+- Pipes panel UI consolidation (Jermaine, 2026-07-07: the pipe generators'
+  UI "will probably be consolidated" — design pass later, not v1.0)
 - TexForge integration + trim-sheet schema contract — v1.1+
 - Buildify/BagaPie integration arc (Kit Validator, Region DNA kit
   switching, footprint export, UE5 export chain) — post-v1.0, per the
