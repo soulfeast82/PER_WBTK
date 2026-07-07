@@ -239,12 +239,12 @@ class OP_SurfaceScatter(OP_BaseGenerator):
             return self.report_warning(
                 "Select a mesh object first — the surface to scatter props on.")
 
-        prop_type   = scene.wbtk_scatter_prop_type
-        count       = scene.wbtk_scatter_count
-        seed        = scene.wbtk_scatter_seed
-        scale       = scene.wbtk_scatter_scale
-        margin      = scene.wbtk_scatter_margin
-        random_rot  = scene.wbtk_scatter_random_rotation
+        prop_type   = getattr(scene, 'wbtk_scatter_prop_type', 'RANDOM_MIX')
+        count       = getattr(scene, 'wbtk_scatter_count', 8)
+        seed        = getattr(scene, 'wbtk_scatter_seed', 42)
+        scale       = getattr(scene, 'wbtk_scatter_scale', 1.0)
+        margin      = getattr(scene, 'wbtk_scatter_margin', 0.3)
+        random_rot  = getattr(scene, 'wbtk_scatter_random_rotation', True)
 
         rng = random.Random(seed)
 

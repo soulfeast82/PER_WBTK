@@ -22,9 +22,9 @@ class OP_GenerateGroundPlane(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixes
-        tiles_x = scene.wbtk_ground_width
-        tiles_y = scene.wbtk_ground_depth
-        tile_size = scene.wbtk_ground_tile_size # Use the specific ground tile size property
+        tiles_x = getattr(scene, 'wbtk_ground_width', 10)
+        tiles_y = getattr(scene, 'wbtk_ground_depth', 10)
+        tile_size = getattr(scene, 'wbtk_ground_tile_size', Config.DEFAULT_TILE_SIZE) # Use the specific ground tile size property
 
         if tiles_x <= 0 or tiles_y <= 0 or tile_size <= 0:
             return self.report_warning("Ground dimensions and tile size must be positive.")

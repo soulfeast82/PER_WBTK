@@ -212,12 +212,12 @@ class OP_GenerateRectVent(OP_BaseGenerator):
 
     def execute(self, context):
         scene = context.scene
-        width  = scene.wbtk_vent_width
-        height = scene.wbtk_vent_height
-        depth  = scene.wbtk_vent_depth
-        slats  = scene.wbtk_vent_slat_count
-        angle  = scene.wbtk_vent_slat_angle
-        frame  = scene.wbtk_vent_frame_thickness
+        width  = getattr(scene, 'wbtk_vent_width', 0.6)
+        height = getattr(scene, 'wbtk_vent_height', 0.4)
+        depth  = getattr(scene, 'wbtk_vent_depth', 0.06)
+        slats  = getattr(scene, 'wbtk_vent_slat_count', 6)
+        angle  = getattr(scene, 'wbtk_vent_slat_angle', 45.0)
+        frame  = getattr(scene, 'wbtk_vent_frame_thickness', 0.03)
 
         master = Utils.create_master("RectVent")
         bm = bmesh.new()
@@ -242,11 +242,11 @@ class OP_GenerateRoundVent(OP_BaseGenerator):
 
     def execute(self, context):
         scene = context.scene
-        radius   = scene.wbtk_vent_round_radius
-        depth    = scene.wbtk_vent_depth
-        blades   = scene.wbtk_vent_fan_blades
-        segments = scene.wbtk_vent_round_segments
-        frame    = scene.wbtk_vent_frame_thickness
+        radius   = getattr(scene, 'wbtk_vent_round_radius', 0.25)
+        depth    = getattr(scene, 'wbtk_vent_depth', 0.06)
+        blades   = getattr(scene, 'wbtk_vent_fan_blades', 5)
+        segments = getattr(scene, 'wbtk_vent_round_segments', 24)
+        frame    = getattr(scene, 'wbtk_vent_frame_thickness', 0.03)
 
         master = Utils.create_master("RoundVent")
         bm = bmesh.new()

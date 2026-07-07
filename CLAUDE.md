@@ -1,10 +1,86 @@
 # WBTK — World Building Toolkit
 
+*SINGLE SOURCE OF TRUTH. The file at
+`WorkingFiles\WBTK\World_Building_Toolkit\CLAUDE.md` is a pointer to this one.
+All project state lives here. **This copy (PER_WBTK) is the live codebase**;
+the WorkingFiles code copy is a stale identical clone — do not work there.*
+
 Blender 5.0 addon for procedural building and city generation.
 Currently **v0.13.0**, targeting **v1.0.0 stabilization release**.
 
 Author: Jermaine Dawson Peterson
 Location in Blender: View3D > Sidebar > World Builder
+
+---
+
+## Current progress (AUDITED 2026-07-06 — machine-verified against code)
+
+> The previous CLAUDE.md recorded Sessions 4a, 4b, and 5a as complete with
+> commits `5b69ce1` and `1d29590`. A full audit on 2026-07-06 found **those
+> commits do not exist in either clone and most of that work is absent from
+> the code.** The progress below is what is actually in the source, verified
+> by a per-file census (every access classified by reading the code).
+
+- ✅ **Session 1** — Scoping + CLAUDE.md locked
+- ✅ **Session 2** — `bm_*` read-sweep — **VERIFIED PRESENT** (bm_data 11
+  guarded, bm_operators 29, bm_generate 16, bm_details 4; zero raw reads in
+  bm_* — only the tracked writes remain)
+- ✅ **Session 3** — Unregister hygiene + Cleanup All Helpers (commit `580edff`)
+- ❌ **Sessions 4a / 4b / 5a** — **RECORDED AS DONE, NOT PRESENT IN CODE.**
+  cables, foliage, pipes, walkways, props: zero getattr guards. structures,
+  block_composer, ui: partial only. The ramp-stairs fix and the
+  `set_sharp_from_angle` keyword fix claimed as "shipped" are also absent.
+  Scope re-queued as Session 5c below.
+- ✅ **Session 5b** — Tail sweep **DONE 2026-07-06**: `operators_vents.py`
+  (11), `operators_fences.py` (10), `operators_scatter.py` (6),
+  `operators_ground.py` (3) = **30 reads converted**. Adversarially
+  machine-verified: all defaults exactly mirror properties.py, diffs contain
+  only the intended lines, `py_compile` clean ×4, zero raw reads remain in
+  the four files. **Viewport smoke test passed 2026-07-07; committed same
+  day (backups removed).**
+- 🔲 **Session 5c — RECOVERY SWEEP (new):** the missing 4a/4b/5a work.
+  Audited raw crash-surface reads remaining: cables 24, foliage 31, pipes 41,
+  walkways 33 (+ ramp-stairs crash fix), props 21, structures 36,
+  block_composer 4, ui.py 24 → **214 raw reads total.**
+- 🔲 **Session 6** — Wall style enum drop + Build Mode behavioral pass +
+  accumulated fixes
+- 🔲 **Session 7** — Detail stamps behavioral pass
+- 🔲 **Session 8** — Release prep
+
+**Audited sweep state (2026-07-06): ~308 reads getattr-guarded (incl.
+operators_preview.py's 142); 214 raw reads remain (190 in operators + 24 in
+ui.py draw code); 34 raw writes tracked.**
+
+**Git state:** PER_WBTK now carries the session-5b commit on top of
+`580edff` (session 3) and `7860f38` (baseline). The pre-existing
+session-2-era and partial-sweep changes in other files remain uncommitted
+working-tree changes until their sessions land. The 4-commit history in the
+previous doc was fiction; the WorkingFiles clone is stale at `580edff`.
+
+---
+
+## Known LIVE bugs (census 2026-07-06 — fix in Session 5c/6)
+
+1. **Generate Ramp Stairs crashes.** `operators_walkways.py:604` reads
+   `scene.wbtk_st_intermediate_posts`, which does not exist —
+   properties.py:84 defines only `wbtk_st_ramp_intermediate_posts`.
+   `OP_StairsRailing` raises AttributeError every run. One-line rename fix.
+   (Previous doc claimed this shipped in "Session 4b" — it did not.)
+2. **`set_sharp_from_angle` called positionally** at
+   `operators_props.py:277` and `operators_structures.py:164`
+   (hasattr-wrapped, so no crash on old Blender, but the previous doc says
+   Blender 5.0 requires the keyword form — if true, both calls raise
+   TypeError at runtime). Verify on Blender 5.0 and convert to
+   `angle=` keyword. (Previous doc claimed this shipped in "5a" — absent.)
+3. **Block Composer can clobber user settings.** It passes parameters by
+   mutating shared `wbtk_building_*` scene props (override L100–105, restore
+   L114–119) with **no try/finally** — an exception mid-generation leaves the
+   user's building panel values overwritten.
+4. Minor: `operators_pipes.py` has an unreachable `'YZ'` bend-plane branch
+   (L218–220; enum defines only XY/XZ) and an unused `flange_spacing` read
+   (L193). `operators_props.py:89` reads `wbtk_barrel_rib_width` and never
+   uses it. `wbtk_cable_between_mode` is defined in properties.py but read
+   nowhere.
 
 ---
 
@@ -14,16 +90,26 @@ Location in Blender: View3D > Sidebar > World Builder
 
 v1.0.0 ships what exists in v0.13.0, made solid and documented. Build Mode is
 the primary authoring workflow. The parametric shape generator and Block
-Composer continue to ship as alternates. Feature work in the Queued list
-(drag handles, face click cycling, auto-setback preview, detail
-randomization, Street Painter) is deferred to v1.1+.
+Composer continue to ship as alternates. Feature work in the Queued list is
+deferred to v1.1+.
 
-The shape of this release is driven by three real risks found during
-scoping — wall style stubs exposed to users, 299 unguarded scene property
-reads that can crash during register/unregister/scene-load, and an
-incomplete unregister path that orphans helper objects. Those three risks
-determine the session order: stability work comes first, behavioral polish
-second, documentation last.
+The shape of this release is driven by three real risks found during scoping:
+
+- **Risk 1** — wall style stubs exposed to users. Resolution in Session 6.
+- **Risk 2** — unguarded scene property reads. **Audited 2026-07-06: 214 raw
+  reads remain (Session 5c scope); ~308 already guarded incl. Sessions 2 + 5b.**
+- **Risk 3** — incomplete unregister path. **Resolved in Session 3.**
+
+---
+
+## Design Laws (locked — do not violate)
+
+- **"Butter" standard:** 80% automation, 20% manual control. Any knob position produces plausible results. Zero friction, zero manual guard rails.
+- **Shape first, details second:** doors, windows, pipes, panels, vents are POST-generation overlays — never baked into shell generation.
+- **2m tile grid** is the measurement backbone. Scale Bible: 50cm primary grid, door 120×20×250cm, building 800×800×350cm.
+- **Region DNA** drives defaults: loading a district profile switches building heights, pipe density, palettes, foliage presets across all generators.
+- **Zero rounded corners** anywhere in the game world (hard art rule).
+- Blocking/layout happens in UE5; WBTK output = architecture assets for locked layouts.
 
 ---
 
@@ -31,40 +117,86 @@ second, documentation last.
 
 **1. Build Mode — PRIMARY.** The `bm_*` module family. Users toggle Build
 Mode on, add/stack/attach blocks, set per-wall types and per-corner chamfers,
-then place detail stamps (AC units, vents, pipes, balconies, fire escapes,
-signs, antennas, canopies) on selected block faces, then generate the
-building. Clean layer separation: data, operators, generation, details.
+then place detail stamps on selected block faces, then generate the
+building.
 
 **2. Parametric Shape Generator — SECONDARY.** The original
 `OP_GenerateBuildingShell` path. Users set shape (RECT, CORNER_CUT, L_SHAPE,
 U_SHAPE, T_SHAPE), enhancements (parapet, plinth, corner columns, bands,
-ledges, sills), and generate from parameters. Still useful for quick standard
-buildings without painting blocks.
+ledges, sills), and generate from parameters. Audited: 47 reads guarded,
+36 still raw (Session 5c).
 
-**3. Block Composer — TERTIARY.** City block generator that packs buildings
-around a rectangular block perimeter. Still registered, still in the UI.
-Known rotation issue on non-rect shapes documented, no new work planned.
-Tooltip already present on `OP_GenerateCityBlock`.
+**3. Block Composer — TERTIARY.** City block generator. Still registered.
+Known rotation issue documented, no new work planned.
 
-**Removed in v0.11.0, confirmed absent in v0.13.0:** the old Custom Builder
-viewport modal painter and the Footprint Painter grid UI. Their geometry
-helpers (`geometry_footprints.py`) are still used by the parametric shape
-generator — keep the file, it is not dead code.
+**Removed in v0.11.0:** Custom Builder viewport modal painter and Footprint
+Painter grid UI.
+
+---
+
+## Long-term vision (for v1.1+ planning, not v1.0 scope)
+
+*Where this section conflicts with the Strategic Pivot below (locked
+2026-07-06), the pivot governs.*
+
+WBTK is becoming an **object-first building editor**, not three separate
+authoring modes. The intended unified flow:
+
+1. Place a core object (a building)
+2. Select it, pick a face, assign wall types (door, window, with sizing)
+3. Layer architectural elements (trim, moldings, details)
+4. Texture/trim-sheet assignment on the object
+5. Environment elements (pipes, cables, vents, signs, canopies) snap onto
+   surfaces
+6. UE5 export pipeline
+
+A Claude Design exploration session produced V2 Mode-dock prototype as
+the chosen direction. Filed under v1.1+. Pipes/cables/walkways are
+**decorators, not objects with faces** — they fit step 5 (Decorate) as
+tool types, not as objects flowing through the 5-stage building flow.
+
+**v1.1+ implication:** the trim-sheet schema becomes the interop contract
+between WBTK and TexForge. WBTK's `operators_trim_uv.py` should consume a
+trim-layout schema (region → cornice/band/window-trim/baseboard) authored
+separately. Worth designing deliberately in v1.1.
+
+---
+
+## Strategic Pivot (locked 2026-07-06) — WBTK is the BRAIN, not the building engine
+
+Two third-party GN tools own generation duties:
+
+- **Buildify 1.0** = the building engine. Verified working on Blender 5.1
+  (2026-07-06): loads, generates, live-edits.
+- **BagaPie v11.0.5** = the greeble/scatter engine (pipes, cables, fences,
+  arrays, scattering).
+
+WBTK = the Project Earl Ray brain:
+
+1. **Build Mode block footprints → Buildify input.** Build Mode exports flat
+   Z=0 base geometry as Buildify input.
+2. **Region DNA = kit switcher.** District profile switches Buildify
+   module-kit collections + parameters per district.
+3. **Kit Validator (new op):** enforces Buildify's module contract — applied
+   rotation/scale, bottom-center origins, pillar collection order
+   flat→CC→CV, +Y facing, single module size per building, 2m grid
+   multiples. Reports violations by name.
+4. **Buildify export chain** (Realize Instances → visual geometry to mesh →
+   UV attribute convert → FBX) **extends `operators_ue_pipeline.py`** rather
+   than living as a new module.
+5. **PANELED/RIBBED/TILED: confirmed cancelled** — Session 6's enum drop
+   stands; wall styles are module kits now, not code.
 
 ---
 
 ## Build Mode architecture (primary path)
 
 ```
-bm_data.py       — Block CRUD, adjacency, grid, sync. Pure library, no operators.
+bm_data.py       — Block CRUD, adjacency, grid, sync. Pure library.
 bm_operators.py  — All user actions. Delegates to bm_data and bm_generate.
-bm_generate.py   — Blocks → BMesh. Preview build + full generation. Pure library.
+bm_generate.py   — Blocks → BMesh. Preview build + full generation.
 bm_details.py    — Detail stamps: types, geometry, placement, operators.
 ```
-
-Only `bm_operators` and `bm_details` register classes (via `_classes`
-tuples). `bm_data` and `bm_generate` are pure library modules with no
-registrations.
 
 ### Block data model
 
@@ -77,278 +209,301 @@ DEFAULT_BLOCK = {
 }
 ```
 
-Per-wall types and per-corner chamfers are first-class in the data model.
-Both were features originally deferred to v1.1; they are present in v0.13.0.
+### Build Mode operators (in `bm_operators.py`)
 
-### Build Mode operators
+Toggle Mode, Add Block, Stack Block, Attach Block, Delete Block, Duplicate
+Block, Sync From Block, Toggle Chamfer, Mirror X, Mirror Y, Clear All, Iso
+View, Generate, **Cleanup All Helpers** (Session 3).
 
-`bm_operators.py`: Toggle Mode, Add Block, Stack Block, Attach Block,
-Delete Block, Duplicate Block, Sync From Block, Toggle Chamfer, Mirror X,
-Mirror Y, Clear All, Iso View, Generate. Plus menu `WBTK_MT_BuildBlockMenu`.
+### Detail stamps (in `bm_details.py`)
 
-`bm_details.py`: Add Detail, Clear Details. Eight detail types:
-AC_UNIT, VENT, PIPE_CLUSTER, BALCONY, FIRE_ESCAPE, SIGN_MOUNT, ANTENNA,
-CANOPY.
-
-### Build Mode scene properties
-
-`wbtk_bm_active`, `wbtk_bm_width`, `wbtk_bm_depth`, `wbtk_bm_height`,
-`wbtk_bm_wall_north/south/east/west`, `wbtk_bm_chamfer_size`,
-`wbtk_bm_attach_dir`, `wbtk_bm_auto_setback`, `wbtk_bm_grid_size`,
-`wbtk_bm_grid_subdivs`, `wbtk_bm_block_color`, `wbtk_bm_detail_face`,
-`wbtk_bm_detail_offset_x`, `wbtk_bm_detail_offset_z`, `wbtk_bm_detail_scale`.
+Eight types: AC_UNIT, VENT, PIPE_CLUSTER, BALCONY, FIRE_ESCAPE,
+SIGN_MOUNT, ANTENNA, CANOPY.
 
 ---
 
 ## Conventions I use
 
 - **Property reads:** `getattr(scene, 'prop', default)` — never assume scene
-  props exist. v1.0 stability sweep is migrating **299 direct
-  `scene.wbtk_*` reads** across 15 files to this pattern. This is a
-  stability issue, not style: direct attribute access is the classic
-  Blender addon crash path during register/unregister ordering, scene
-  switching, or loading a `.blend` saved before a property existed.
-- **Shared geometry methods** live on `GeometryBuildings` class. Do not
-  duplicate into operators.
-- **BMesh conversion** for the parametric path goes through `_finalize_bm`
-  (static method on `OP_GenerateBuildingShell`).
-- **Build Mode helper objects** use prefixes: `WBTK_BM_` for blocks,
-  `WBTK_DTL_` for details, `_WBTK_BM_Grid` / `_WBTK_BM_GridFill` for grid.
-- **Operators register via tuples:**
-  - Legacy modules use `_classes_to_register`
-  - The `bm_*` modules that register classes (`bm_operators`, `bm_details`)
-    use `_classes`. `bm_data` and `bm_generate` do not register anything.
-- **Operators report results via** `self.report({'INFO'|'WARNING'|'ERROR'}, …)`.
-  `print()` is for diagnostic errors and warnings, not user messages.
-- **Every operator has a tooltip docstring** as the class docstring.
+  props exist.
+- **Defaults in `getattr` must mirror `properties.py` exactly.** Use
+  `Config.*` symbols where properties.py does
+  (e.g., `Config.DEFAULT_WALL_HEIGHT`, `Config.WALL_THICKNESS`,
+  `Config.RAIL_BOTH/LEFT/OUTER`, `Config.DEFAULT_TILE_SIZE`).
+- **Operators use** `self.report({'INFO'|'WARNING'|'ERROR'}, …)` not `print()`.
+- **Class registration:** legacy modules use `_classes_to_register`,
+  bm_* modules that register classes use `_classes`.
+- **Helper object prefixes:** `WBTK_BM_` (blocks), `WBTK_DTL_` (details),
+  `_WBTK_BM_Grid` / `_WBTK_BM_GridFill` (grid).
+
+---
+
+## Standing instructions for sweep sessions
+
+- **Restate-before-edit pattern:** Claude Code restates spec, flags
+  uncertainty, gets confirmation before any file writes. Always.
+- **One file at a time** for high-stakes files (anything in the parametric
+  pipeline or with 20+ reads). Approve, smoke test, then next file.
+- **Batch approval acceptable for low-stakes files** with <10 reads each
+  (e.g., Session 5b's 4 small files reviewed as combined diff).
+- **Skip rewrites of files with zero reads to migrate.** Pure no-op
+  rewrites add drift risk for zero benefit. Apply this to:
+  - Files with 0 `scene.wbtk_*` reads (no work to do)
+  - Files with reads already migrated to getattr from prior work
+  - Log any writes in such files as follow-ups without touching the file
+- **Accept non-functional drift in full-file rewrites.** When complete-file
+  rewrites round-trip through Write and produce non-functional drift
+  (Unicode escape vs literal char, trailing newline policy), accept as a
+  known consequence rather than fighting it. Note in summary, don't loop
+  on corrective edits.
+- **API audit pattern:** when Blender API changes are surfaced, grep the
+  entire codebase for the same pattern and fix all instances together.
+  Don't fix one and find another next session.
+- **Trust nothing undocumented-by-code (added 2026-07-06):** progress claims
+  are only real once verified against the source and committed. Audit before
+  building on any "done" claim; commit at the end of every session so the
+  git log IS the progress record.
+
+---
+
+## Workflow rules (non-negotiable)
+
+- **Backup before any patch run:** copy target to `<name>.py.bak` (never
+  `.py` — Blender registers stray .py files).
+- `python -m py_compile` after EVERY file edit. One file at a time for
+  high-stakes files.
+- **STOP CONDITION:** anchor/menu/API not found exactly as expected → STOP,
+  report, wait. Never improvise a substitute.
+- Surgical edits over rewrites. Preserve working code paths.
+- Jermaine verifies in the Blender viewport after each milestone; wait for
+  confirmation before stacking risky changes.
+- Model policy: sweep sessions default to Opus; escalate to Fable only
+  after two failed attempts on the same problem.
 
 ---
 
 ## How I work
 
-- **Systems-first thinker.** Strong on macro structure, less natural on
-  line-level detail.
-- **Prefer complete files** over diffs when changes are substantial. For
-  small edits (one function, one property), a clearly marked diff is fine.
-- **Keep it real with me.** If an approach is wrong, say so and why. If the
-  codebase disagrees with what I've told you in this file, tell me — the
-  code is ground truth.
-- **Voice-dumped fragments from phone** are common. When a prompt is
-  fragmented or ambiguous, **ask clarifying questions before assuming**.
-  Don't silently fill gaps in a precision-mode session.
-- **Before large changes, restate what you understand I'm asking for as a
-  short spec** — goal, what to preserve, deliverable format. Wait for my
-  confirmation before editing files.
-- **One thing per session.** "Polish Build Mode" is a scope. "Fix the
-  stack-block Z calculation when attaching to a chamfered face" is a session.
-- Opus 4.7 — literal instruction following is expected. State preferences
-  explicitly; don't rely on the model inferring from past context.
+- **Systems-first thinker.** Strong on macro structure, less on line-level.
+- **Prefer complete files** for substantial changes. Small targeted edits
+  (1 function, ≤10 lines in large files) acceptable.
+- **Keep it real.** If an approach is wrong, say so and why.
+- **Ask clarifying questions** when prompts are ambiguous. Don't silently
+  fill gaps in a precision-mode session.
+- **Restate-before-edit.** Goal, what to preserve, deliverable format.
+  Wait for my confirmation before editing files.
+- **One thing per session.**
+- Literal instruction following. State preferences explicitly.
 
 ---
 
-## The three shipping risks (driving the roadmap order)
+## Voice & communication
 
-**Risk 1 — Stub wall styles exposed to users.** PANELED/RIBBED/TILED are
-selectable in the UI (`properties.py:113-117`) and produce nothing or
-garbage geometry. This is a shipping defect, not a cleanup item.
-**Resolution:** drop the values from the enum entirely for v1.0. Add a
-one-time migration handler to silently coerce loaded `.blend` files with
-stale values back to FLAT. If/when wall styles ship (v1.2 per roadmap),
-the enum options get added back with their implementations, not before.
+Jermaine is ADHD, voice-types, wants decisive single recommendations (no
+option menus), numbered steps, one clear next action per response, and
+celebrations ONLY on verified outcomes (clean compile, confirmed viewport
+behavior).
 
-**Risk 2 — 299 unguarded `scene.wbtk_*` reads across 32 files.** Classic
-Blender crash path during register/unregister ordering, scene switching,
-or loading a `.blend` saved before a property existed. The `bm_*` modules
-— the primary authoring path — are among the offenders (16 reads in
-`bm_data.py`, 13 in `bm_operators.py`). Any one of those can throw
-AttributeError under the wrong load order. **This is a stability sweep,
-not a style sweep.** It ships in two sessions (primary path first, legacy
-second) so regressions are scoped.
+---
 
-**Risk 3 — Incomplete unregister path.** `register()` gathers classes from
-multiple modules; `unregister()` only calls `operators_live_preview.cleanup()`.
-No cleanup for orphaned `WBTK_BM_*` blocks, `WBTK_DTL_*` details,
-`_WBTK_BM_Grid`, `_WBTK_BM_GridFill`. If a user disables the addon mid
-Build-Mode-session, orphaned objects stay in the scene with no way to
-clean them up. **This risk compounds Risks 1 and 2**: a user's instinct
-when they hit a crash or broken output is to disable and re-enable the
-addon, which is exactly the action that makes Risk 3 worst. The
-"Cleanup All Helpers" operator is therefore not polish; it is the safety
-net for the other two risks.
+## Follow-ups consolidated (census-verified 2026-07-06)
+
+### Unguarded writes — 34 total (census-verified; supersedes the old "44")
+
+`getattr` doesn't cover writes. Same crash surface as reads during
+register/unregister/stale-`.blend` ordering.
+
+| File | Line(s) | Writes | Context |
+|---|---|---|---|
+| `bm_data.py` | 147–155 | 8 | sync_props_from_block: width, depth, height, 4× wall_*, chamfer_size |
+| `bm_operators.py` | 27, 31, 491 | 3 | `wbtk_bm_active` toggles |
+| `operators_live_preview.py` | 215–216, 227–228, 252–253 | 6 | `wbtk_live_preview_active` / `wbtk_live_preview_type` |
+| `operators_cables.py` | 312 | 1 | `wbtk_cable_seed` (randomize) |
+| `operators_foliage.py` | 278 | 1 | `wbtk_foliage_seed` (randomize) |
+| `operators_pipes.py` | 400 | 1 | `wbtk_pipe_wear_seed` (randomize) |
+| `operators_structures.py` | 614 | 1 | `wbtk_building_seed` (randomize) |
+| `operators_block_composer.py` | 100–105, 114–119, 202 | 13 | override/restore paths + `wbtk_block_seed` |
+
+Note: `operators_foliage.py`'s preset loader performs ~28 additional
+`setattr` writes but they are hasattr-guarded (L94–99) — not crash surface;
+all names verified to exist in properties.py.
+
+**Disposition:** wrap in `hasattr` guards or try/except AttributeError in
+Session 6 if scope permits; else defer to v1.0.1. Template pattern exists in
+the foliage preset loader. Block Composer's 12 override/restore writes should
+additionally gain try/finally (see Live bug #3).
+
+### Pre-existing geometry / behavior issues (Session 6 / v1.0.1)
+
+**Pipe bend flange orientation bug.** `OP_GeneratePipeRun` produces a
+bend where the flange on the turn-pipe end faces the wrong direction at
+the joint. Pre-existing in `geometry_pipes.py`, not related to sweep.
+
+**UCX collision boxes visible in viewport for cables-between-selected.**
+Generated `UCX_Cable_Span_*` boxes are visible instead of hidden; should be
+auto-hidden per UE5 export convention. Not a sweep regression.
+
+**Partially-guarded shell read block in `operators_structures.py:176–190`.**
+15 raw reads sit inside a try/except AttributeError — caught, but should be
+migrated to getattr in Session 5c, after which the wrapper is dead code to
+remove in Session 6.
+
+### From Session 3's audit (deferred)
+
+**#9 Modal `OP_ToggleMode` survives addon unregister.** Architectural
+defer. Cleanup All Helpers gives users the manual escape.
+
+**#10 Material leak in `bm_data.create_grid`.** Creates new
+`WBTK_BM_GridFill` and `WBTK_BM_GridMat` every Build Mode toggle cycle.
+**Fix in Session 6:** two `get-or-create` conversions.
+
+**#11 Orphan `WBTK_Live_Preview_Mesh` edge case.** Defer — no real-world
+repro.
+
+### Corrected record — claims from the previous doc that are NOT in the code
+
+- ~~"Ramp stairs fix shipped in 4b"~~ → **bug is LIVE** (see Live bugs #1).
+- ~~"set_sharp_from_angle keyword fixes shipped in 5a"~~ → **calls are still
+  positional** (see Live bugs #2).
+- ~~"Sessions 4a/4b/5a sweeps complete, 243/299 (81%)"~~ → actual audited
+  state: 214 raw reads remain; see Session 5c scope.
+- ~~"ui.py `→`/newline cosmetic drift accepted in 5a rewrite"~~ → no such
+  rewrite exists in this code; irrelevant.
 
 ---
 
 ## In scope for v1.0.0
 
-### Primary path: Build Mode
+### Stability sweeps (Risk 2)
 
-- Toggle Mode enters and exits cleanly (no orphaned grid, no stuck state)
-- Add / Stack / Attach / Delete / Duplicate all work without crash on
-  reasonable block counts (tested up to ~50 blocks)
-- Sync From Block correctly updates UI props from selected block's data
-- Toggle Chamfer respects per-corner state and visually updates
-- Mirror X / Mirror Y produce correct output (verify with asymmetric block
-  sets)
-- Clear All removes blocks, details, and resets mode cleanly
-- Generate produces building geometry matching the preview
-- Preview stays in sync during block edits (live preview timer still firing)
-- Detail stamps place correctly on selected block face with correct
-  orientation, scale, and offsets across all 8 detail types
-- Details are parented to blocks and survive block delete gracefully (either
-  deleted with the block or explicitly re-parented)
+- ✅ Session 2: `bm_data.py`, `bm_operators.py`, `bm_generate.py`,
+  `bm_details.py` — verified fully guarded (reads)
+- ✅ Session 5b (2026-07-06): `operators_vents.py` (11),
+  `operators_fences.py` (10), `operators_scatter.py` (6),
+  `operators_ground.py` (3) — verified, smoke-tested + committed 2026-07-07
+- 🔲 Session 5c (recovery, ~214 reads): `operators_pipes.py` (41),
+  `operators_walkways.py` (33 + ramp crash fix), `operators_foliage.py`
+  (31), `operators_structures.py` (36 residual), `operators_cables.py`
+  (24), `operators_props.py` (21), `ui.py` (24), `operators_block_composer.py`
+  (4). Also convert the two positional `set_sharp_from_angle` calls.
+  - Skip: `operators_preview.py` (142 already guarded),
+    `operators_live_preview.py`, `operators_region_dna.py`,
+    `operators_trim_uv.py`, `operators_ue_pipeline.py`, `properties.py`,
+    `utils.py` — zero raw reads (writes logged above).
 
-### Secondary path: Parametric Shape Generator
+### Cleanup items (Session 6)
 
-- All 5 shapes (RECT, CORNER_CUT, L_SHAPE, U_SHAPE, T_SHAPE) + all 6
-  enhancements working end-to-end
-- Non-rectangular footprints stable
-- WINDOW/DOOR on angled walls stable
-- Wall style property reduced to FLAT only
-- No new work — stability only
+- Fix misleading comments in `__init__.py` lines 77–79
+- Remove the then-dead try/except in `operators_structures.py` shell block
+  (after 5c migrates its reads)
+- Verify Block Composer tooltip presence
+- Remove dead `'YZ'` branch + unused `flange_spacing` read in
+  `operators_pipes.py`; unused `wbtk_barrel_rib_width` read in
+  `operators_props.py`
 
-### Tertiary path: Block Composer
+### Behavioral pass (Session 6)
 
-- Generates city blocks without crashing
-- Known rotation alignment issue on non-rect shapes documented
-- No new work
+- Remove PANELED/RIBBED/TILED from wall style enum (Risk 1; cancellation
+  confirmed by Strategic Pivot — wall styles are module kits now)
+- Migration handler for old `.blend` files (coerce stale wall style → FLAT)
+- Material leak fix #10 (two `get-or-create` conversions in bm_data.py)
+- Right-click menu collision fix (Build Mode)
+- Grid live-update — add `update=` callbacks to `wbtk_bm_grid_size`,
+  `wbtk_bm_grid_subdivs`, `wbtk_bm_block_color`
+- Pipe bend flange orientation fix (geometry_pipes.py)
+- UCX visibility fix for cables-between-selected
+- Block Composer try/finally around override/restore writes
+- Build Mode behavioral checklist: Toggle Mode edge cases, Mirror X/Y
+  correctness, Clear All completeness
+- 34 unguarded writes if time permits; else defer to v1.0.1
 
-### Stability sweeps (driven by Risks 2 and 3)
+### Detail stamps polish (Session 7)
 
-- **`getattr` sweep for `bm_*` modules** — migrate 29 direct reads in
-  `bm_data.py` and `bm_operators.py`
-- **`getattr` sweep for top legacy offenders** — `operators_pipes` (42),
-  `operators_structures` (37), `operators_walkways` (33),
-  `operators_foliage` (32), `operators_cables` (25)
-- **`getattr` sweep for remaining files** — `ui.py` (24), plus every
-  remaining file with any direct reads
-- **Unregister audit** — confirm every registered class is unregistered,
-  every timer stopped, every handler removed
-- **"Cleanup All Helpers" operator** — user-facing escape hatch that
-  removes all objects with `WBTK_BM_*`, `WBTK_DTL_*`, `_WBTK_*` prefixes
-  and clears orphaned collections
+5 faces × 8 types = 40 combinations. Parenting-on-delete behavior.
+Offset/scale edge cases. UX polish (specific issues to be captured at
+session start).
 
-### Cleanup items (cheap, user-facing)
-
-- Fix misleading comments in `__init__.py` lines 77–79 (Footprint Painter
-  and Custom Builder comments remain after imports were removed)
-- Verify Block Composer tooltip is present and readable
-
-### Release essentials
+### Release essentials (Session 8)
 
 - `bl_info` version → `(1, 0, 0)`
 - `doc_url` populated
-- `README.md` covering:
-  - Install instructions
-  - Build Mode as the primary workflow (with one screenshot or GIF of the
-    block → detail → generate flow)
-  - Parametric Shape Generator and Block Composer as alternates
-  - Detail stamps showcase (the 8 types with visuals)
-  - Known limitations section
-- `LICENSE` file
+- README with Build Mode primary workflow + 1+ visual
+- LICENSE file
+- Changelog including ramp stairs fix and `set_sharp_from_angle` fixes
+  (once actually shipped in 5c)
+- Final install → reload → uninstall smoke test on fresh Blender 5.0
 
 ---
 
 ## Explicitly OUT of scope for v1.0.0 (deferred to v1.1+)
 
-From the handoff Queued list:
-
-- **Drag handles** — viewport face dragging for block resize
-- **Face click cycling** — click face in viewport to cycle wall type
-- **Auto-setback preview** — visual indicator of setback amount
-- **Detail randomization** — scatter details with randomized positions
-- **Street Painter (Phase 4)** — Grease Pencil stroke → city generation
-
-From the prior roadmap, still deferred:
-
-- **Explode Building operator**
-- **Wall style geometry** (PANELED, RIBBED, TILED implementations) — v1.2.
-  For v1.0, the enum values are removed, not merely hidden.
-- **Batch Row Generator** passing `building_shape`
-- **Block Composer rotation alignment** fix
-- **Wear Layer** (vertex color from geometry analysis) — Phase 4/5
-- **Trim Sheet Intelligence** (aspect-ratio-aware UV per face) — Phase 5
-- **TexForge integration** — separate product milestone
+- Drag handles (viewport face dragging for block resize)
+- Face click cycling (click face in viewport to cycle wall type)
+- Auto-setback preview
+- Detail randomization (scatter details with randomized positions)
+- Street Painter (Phase 4) — post-1.0, rides on Buildify's curve drawing
+  mode + WBTK wrappers per the Strategic Pivot
+- Explode Building operator
+- Wall style geometry (PANELED, RIBBED, TILED implementations) —
+  **cancelled outright by the Strategic Pivot** (module kits, not code)
+- Batch Row Generator passing `building_shape`
+- Block Composer rotation alignment fix
+- Wear Layer (vertex color from geometry analysis) — Phase 4/5
+- Trim Sheet Intelligence (aspect-ratio-aware UV per face) — Phase 5
+- Object-first unified editor flow — v1.1+ design exploration
+- TexForge integration + trim-sheet schema contract — v1.1+
+- Buildify/BagaPie integration arc (Kit Validator, Region DNA kit
+  switching, footprint export, UE5 export chain) — post-v1.0, per the
+  Strategic Pivot
 
 ---
 
 ## Documented as known limitations in v1.0.0 README
 
-Ship with these, document them, do not hide them:
-
-- Block Composer has slight edge misalignment on rotated non-rect shapes at
-  90°/180° block perimeter positions
-- Corner columns at non-90° joints (e.g., 45° corner-cut) have slight
-  visual overlap — works at game scale
+- Block Composer slight edge misalignment on rotated non-rect shapes
+- Corner columns at non-90° joints have slight visual overlap (game-scale fine)
 - Detail stamps use fixed geometry (no randomization; coming in v1.1)
-- Build Mode wall type changes currently require regenerate to see in final
-  output (if that's still true — verify in the Build Mode behavioral
-  session)
+- Pipe Run (L-shape) minor flange orientation quirk at bend joint —
+  to be fixed in v1.0.1 if not in Session 6
+- UCX cables-between-selected visibility — to be fixed in v1.0.1 if not in
+  Session 6
 
 ---
 
-## Session roadmap (soft target: 6–8 weeks)
+## Session roadmap
 
-**Stability work first, behavioral verification second, release prep last.**
+1. ✅ **Session 1** — Scoping + CLAUDE.md locked
+2. ✅ **Session 2** — `bm_*` modules sweep (verified in code)
+3. ✅ **Session 3** — Unregister hygiene + Cleanup All Helpers (`580edff`)
+4. ✅ **Session 5b** — Tail sweep (vents/fences/scatter/ground, 30 reads),
+   done + machine-verified 2026-07-06; smoke-tested + committed 2026-07-07.
+5. 🔲 **Session 5c** — Recovery sweep: the 214 raw reads that Sessions
+   4a/4b/5a were supposed to cover, plus the ramp-stairs crash fix and the
+   two `set_sharp_from_angle` keyword conversions. Biggest remaining chunk;
+   split across multiple sittings (pipes+walkways / foliage+cables /
+   structures+props / ui+block_composer), one-file-at-a-time rules apply
+   (several files have 20+ reads).
+6. 🔲 **Session 6** — Wall style enum drop + Build Mode behavioral pass +
+   accumulated fixes (material leak, right-click collision, grid
+   live-update, pipe bend, UCX, dead code, block-composer try/finally,
+   possibly the 34 writes)
+7. 🔲 **Session 7** — Detail stamps behavioral pass + UX polish
+8. 🔲 **Session 8** — Release prep (README, LICENSE, version bump,
+   documentation, final smoke test)
 
-1. **Session 1 (complete) — Scoping + CLAUDE.md locked.**
-
-2. **Session 2 — Stability sweep: `bm_*` modules.**
-   Migrate `bm_data.py` (16 direct reads) and `bm_operators.py` (13) to
-   `getattr(scene, 'prop', default)`. Primary authoring path gets hardened
-   first. Test Build Mode end-to-end after migration.
-
-3. **Session 3 — Unregister hygiene + "Cleanup All Helpers" operator.**
-   Audit unregister path. Add cleanup for orphaned `WBTK_BM_*`,
-   `WBTK_DTL_*`, `_WBTK_*` objects and collections. Build the user-facing
-   Cleanup All Helpers operator in the Build Mode panel. Test disable →
-   re-enable cycles with active Build Mode state.
-
-4. **Session 4 — Stability sweep: top legacy offenders.**
-   `operators_pipes.py` (42), `operators_structures.py` (37),
-   `operators_walkways.py` (33), `operators_foliage.py` (32),
-   `operators_cables.py` (25). One file per round of review within the
-   session; test each area in Blender before moving to the next.
-
-5. **Session 5 — Stability sweep: remaining files.**
-   `ui.py` (24) and every remaining file with any direct reads. Smaller
-   targets, but completeness matters for the audit story.
-
-6. **Session 6 — Wall style drop + Build Mode behavioral pass.**
-   Remove PANELED/RIBBED/TILED from the wall style enum. Add migration
-   handler for old `.blend` files (coerce stale values to FLAT on load).
-   Then run the Build Mode behavioral checklist: Toggle Mode edge cases,
-   Mirror X/Y correctness on asymmetric block sets, Clear All
-   completeness.
-
-7. **Session 7 — Detail stamps behavioral pass.**
-   Verify every detail type places correctly on every supported face
-   (5 faces × 8 types = 40 combinations). Parenting-on-delete behavior.
-   Offset and scale edge cases. Visual orientation sanity on non-flat
-   block configurations.
-
-8. **Session 8 — Release prep.**
-   Fix misleading `__init__.py` comments. Verify Block Composer tooltip.
-   Bump `bl_info` to `(1, 0, 0)`. Add `doc_url`. Write README. Add
-   LICENSE. Capture one screenshot or GIF of the Build Mode flow. Final
-   install → reload → uninstall smoke test on a fresh Blender 5.0.
-
-One session at a time. Test in Blender between sessions. Commit to git
-(local-only is fine) before the next session.
+**Commit discipline going forward:** every session ends with a commit in
+PER_WBTK. Uncommitted work is how the 4a/4b/5a loss happened.
 
 ---
 
 ## Codebase quick reference (v0.13.0)
 
-- **32 `.py` files** as of v0.13.0
-- **New in v0.13.0:** `bm_data.py` (~335 lines), `bm_details.py` (~405),
-  `bm_generate.py` (~179), `bm_operators.py` (~424)
-- **Largest files:** `geometry_buildings.py`, `ui.py`, `operators_walkways.py`,
-  `properties.py`, `operators_structures.py`, `operators_preview.py`
-- **Registration:** `__init__.py` gathers class tuples from each module;
-  legacy modules use `_classes_to_register`, new `bm_*` modules with
-  operators use `_classes`
-- **Property management:** `properties.PropertyManager.register_properties()`
-  / `unregister_properties()`
+- **32 `.py` files**
+- **New in v0.13.0:** `bm_data.py`, `bm_details.py`, `bm_generate.py`,
+  `bm_operators.py`
+- **Largest files:** `geometry_buildings.py`, `ui.py`,
+  `operators_walkways.py`, `properties.py`, `operators_structures.py`,
+  `operators_preview.py`
 
 ### Build Mode pipeline
 
@@ -365,6 +520,10 @@ OP_Generate calls into bm_generate for final building geometry
     ↓
 Optional: trim UV via operators_trim_uv
 ```
+
+Safety net: Cleanup All Helpers (Session 3) sweeps `WBTK_BM_*`,
+`WBTK_DTL_*`, `_WBTK_*`, live preview helpers. Auto-exits Build Mode if
+active.
 
 ### Parametric pipeline (unchanged)
 
@@ -385,19 +544,26 @@ _finalize_bm → bevel modifiers → trim UV
 v1.0.0 is ready to ship when:
 
 - Build Mode works end-to-end without crashing on reasonable input
-- All 8 detail types place correctly on all 5 faces without visual bugs
-- Parametric Shape Generator continues to work for all 5 shapes +
-  6 enhancements
+- All 8 detail types place correctly on all 5 faces
+- Parametric Shape Generator works for all 5 shapes + 6 enhancements
 - Block Composer generates city blocks without crashing
-- The `getattr` stability sweep is complete across `bm_*` and legacy
-  modules (299 → 0 direct `scene.wbtk_*` reads)
-- Unregister path cleans up every registered class and helper object
-- "Cleanup All Helpers" operator is available to users as a safety net
-- Wall style property is FLAT-only, migration handler in place for old
-  `.blend` files
-- Addon installs, reloads, and uninstalls cleanly on a fresh Blender 5.0
+- Read sweep complete (Sessions 2, 5b, 5c) — zero raw crash-surface reads
+- Ramp-stairs crash fixed and viewport-verified (Session 5c)
+- `set_sharp_from_angle` keyword conversions verified on Blender 5.0
+- Unregister path clean (Session 3 ✅)
+- "Cleanup All Helpers" operator available (Session 3 ✅)
+- Wall style property is FLAT-only with migration handler (Session 6)
+- Grid live-update callbacks wired (Session 6)
+- Right-click menu collision resolved (Session 6)
+- Material leak #10 fixed (Session 6)
+- Dead code removed in `operators_structures.py` (Session 6)
+- Pipe bend flange direction fixed (Session 6)
+- UCX cables visibility fixed (Session 6 or v1.0.1 in known limitations)
+- Detail stamps UX polished (Session 7)
+- Addon installs, reloads, uninstalls cleanly on fresh Blender 5.0
 - README covers Build Mode as primary with at least one visual
-- LICENSE is in place
+- LICENSE in place
 - `bl_info` is `(1, 0, 0)`
-- Known limitations are documented, not hidden
+- Known limitations documented, not hidden
 - Misleading `__init__.py` comments cleaned up
+- Changelog reflects only fixes that are verifiably in the code

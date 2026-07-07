@@ -25,10 +25,10 @@ class OP_GenerateVerticalFence(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixes
-        fence_width = scene.wbtk_vfence_width
-        fence_height = scene.wbtk_vfence_height
-        bar_spacing = scene.wbtk_vfence_bar_spacing
-        post_thickness = scene.wbtk_vfence_post_thickness
+        fence_width = getattr(scene, 'wbtk_vfence_width', 4.0)
+        fence_height = getattr(scene, 'wbtk_vfence_height', 1.0)
+        bar_spacing = getattr(scene, 'wbtk_vfence_bar_spacing', 0.3)
+        post_thickness = getattr(scene, 'wbtk_vfence_post_thickness', 0.05)
 
         if fence_width <= 0 or fence_height <= 0 or bar_spacing <= 0 or post_thickness <= 0:
             return self.report_warning("Fence dimensions and spacing must be positive.")
@@ -82,12 +82,12 @@ class OP_GenerateChainLinkFence(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixes
-        width = scene.wbtk_clfence_width
-        height = scene.wbtk_clfence_height
-        post_spacing = scene.wbtk_clfence_post_spacing
-        thickness = scene.wbtk_clfence_bar_thickness
-        divisions = scene.wbtk_clfence_mesh_divisions
-        post_shape = scene.wbtk_clfence_post_shape # SQUARE or CYLINDER
+        width = getattr(scene, 'wbtk_clfence_width', 4.0)
+        height = getattr(scene, 'wbtk_clfence_height', 2.0)
+        post_spacing = getattr(scene, 'wbtk_clfence_post_spacing', 2.0)
+        thickness = getattr(scene, 'wbtk_clfence_bar_thickness', 0.05)
+        divisions = getattr(scene, 'wbtk_clfence_mesh_divisions', 10)
+        post_shape = getattr(scene, 'wbtk_clfence_post_shape', 'SQUARE') # SQUARE or CYLINDER
 
         if width <= 0 or height <= 0 or post_spacing <= 0 or thickness <= 0:
             return self.report_warning("Fence dimensions must be positive.")
