@@ -135,7 +135,10 @@ class GeometryBuildings:
                 build_offset_wall_segment(bm, win_end_local, length, win_z_bottom, win_z_top) # Right side
     
                 # 2. Define Coordinates for the Inset Box Faces
-                frame = frame_thick; depth = inset_depth
+                # FIX 2026-08-05: frame was frame_thick (0.05) — pane sat 5cm smaller than
+                # the hole on all sides with NOTHING filling the ring = see-through gap
+                # into the shell interior. Pane must fill the opening exactly.
+                frame = 0.0; depth = inset_depth
                 z_f_min = win_z_bottom + frame; z_f_max = win_z_top - frame
                 z_b_min = z_f_min; z_b_max = z_f_max
                 xy_f_min_local = win_start_local + frame; xy_f_max_local = win_end_local - frame
@@ -485,7 +488,8 @@ class GeometryBuildings:
                 _make_box(bm, win_end, wall_len, win_z_bot, win_z_top)     # right
 
                 # Inset window box (reveals)
-                frame = Config.WINDOW_FRAME_THICKNESS
+                # FIX 2026-08-05: same gap bug as build_shell_wall — pane must fill the hole
+                frame = 0.0  # was Config.WINDOW_FRAME_THICKNESS
                 inset = Config.WINDOW_INSET_DEPTH
                 f_start = win_start + frame
                 f_end = win_end - frame

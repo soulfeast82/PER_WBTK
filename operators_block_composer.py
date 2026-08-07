@@ -104,19 +104,20 @@ class OP_GenerateCityBlock(bpy.types.Operator):
                 scene.wbtk_building_use_seed = True
                 scene.wbtk_building_seed = b_seed
 
-                # Generate building
-                master_name = f"Block_B{building_idx:03d}"
-                bpy.ops.wbtk.generate_building_shell(
-                    override_name=master_name
-                )
-
-                # Restore scene properties
-                scene.wbtk_building_shape = orig_shape
-                scene.wbtk_building_width = orig_width
-                scene.wbtk_building_depth = orig_depth
-                scene.wbtk_building_floors = orig_floors
-                scene.wbtk_building_use_seed = orig_use_seed
-                scene.wbtk_building_seed = orig_seed
+                try:
+                    # Generate building
+                    master_name = f"Block_B{building_idx:03d}"
+                    bpy.ops.wbtk.generate_building_shell(
+                        override_name=master_name
+                    )
+                finally:
+                    # Restore scene properties
+                    scene.wbtk_building_shape = orig_shape
+                    scene.wbtk_building_width = orig_width
+                    scene.wbtk_building_depth = orig_depth
+                    scene.wbtk_building_floors = orig_floors
+                    scene.wbtk_building_use_seed = orig_use_seed
+                    scene.wbtk_building_seed = orig_seed
 
                 # Position and rotate the building
                 master_obj = bpy.data.objects.get(f"{master_name}_master")

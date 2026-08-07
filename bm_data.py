@@ -18,7 +18,7 @@ GRID_OBJ = "_WBTK_BM_Grid"
 GRID_FILL_OBJ = "_WBTK_BM_GridFill"
 
 DEFAULT_BLOCK = {
-    "w": 4.0, "d": 4.0, "h": 3.0,
+    "w": 4.0, "d": 4.0, "h": Config.DEFAULT_WALL_HEIGHT,  # Scale Bible: floor 350cm (was 3.0)
     "walls": {"north": "SOLID", "south": "SOLID", "east": "SOLID", "west": "SOLID"},
     "chamfers": [],
     "chamfer_size": 1.0,
@@ -146,7 +146,7 @@ def sync_to_panel(scene, obj):
     scene['_bm_syncing'] = True
     scene.wbtk_bm_width = data.get("w", 4.0)
     scene.wbtk_bm_depth = data.get("d", 4.0)
-    scene.wbtk_bm_height = data.get("h", 3.0)
+    scene.wbtk_bm_height = data.get("h", Config.DEFAULT_WALL_HEIGHT)
     walls = data.get("walls", {})
     scene.wbtk_bm_wall_north = walls.get("north", "SOLID")
     scene.wbtk_bm_wall_south = walls.get("south", "SOLID")
@@ -162,7 +162,7 @@ def sync_from_panel(scene, obj):
     data = get_data(obj)
     data["w"] = getattr(scene, 'wbtk_bm_width', 4.0)
     data["d"] = getattr(scene, 'wbtk_bm_depth', 4.0)
-    data["h"] = getattr(scene, 'wbtk_bm_height', 3.0)
+    data["h"] = getattr(scene, 'wbtk_bm_height', Config.DEFAULT_WALL_HEIGHT)
     data["walls"] = {
         "north": getattr(scene, 'wbtk_bm_wall_north', 'SOLID'),
         "south": getattr(scene, 'wbtk_bm_wall_south', 'SOLID'),

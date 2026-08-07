@@ -427,7 +427,7 @@ class PropertyManager:
             default='AUTO',
             description="Number of windows per wall section per floor")),
         ('wbtk_building_window_width', bpy.props.FloatProperty(
-            name="Window Width (m)", default=1.5, min=0.3, max=4.0, unit='LENGTH',
+            name="Window Width (m)", default=1.0, min=0.3, max=4.0, unit='LENGTH',
             description="Width of each window opening")),
         ('wbtk_building_window_height', bpy.props.FloatProperty(
             name="Window Height (m)", default=1.0, min=0.3, max=3.0, unit='LENGTH',
@@ -444,10 +444,10 @@ class PropertyManager:
             default='RECESSED',
             description="Entrance style for doorway openings")),
         ('wbtk_building_door_width', bpy.props.FloatProperty(
-            name="Door Width (m)", default=1.0, min=0.5, max=4.0, unit='LENGTH',
+            name="Door Width (m)", default=1.2, min=0.5, max=4.0, unit='LENGTH',
             description="Width of the doorway opening")),
         ('wbtk_building_door_height', bpy.props.FloatProperty(
-            name="Door Height (m)", default=2.0, min=1.5, max=4.0, unit='LENGTH',
+            name="Door Height (m)", default=2.5, min=1.5, max=4.0, unit='LENGTH',
             description="Height of the doorway opening")),
         ('wbtk_building_door_inset', bpy.props.FloatProperty(
             name="Door Inset (m)", default=0.2, min=0.05, max=1.0, unit='LENGTH',
@@ -651,7 +651,7 @@ class PropertyManager:
             name="Depth", default=4.0, min=0.5, max=50.0, step=50,
             description="Block depth (Y)", update=_bm_update)),
         ('wbtk_bm_height', bpy.props.FloatProperty(
-            name="Height", default=3.0, min=0.5, max=20.0, step=50,
+            name="Height", default=Config.DEFAULT_WALL_HEIGHT, min=0.5, max=20.0, step=50,
             description="Block height (Z)", update=_bm_update)),
         ('wbtk_bm_wall_north', bpy.props.EnumProperty(
             name="North", items=_WALL_ITEMS, default='SOLID', update=_bm_update)),

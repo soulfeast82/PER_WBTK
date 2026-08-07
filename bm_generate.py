@@ -22,11 +22,21 @@ def build_preview_bm(scene):
     add_slabs = getattr(scene, 'wbtk_building_add_floor_slabs', True)
     thickness = Config.WALL_THICKNESS
 
-    bm = bmesh.new()
-    info = bm_data.all_bounds()
+    # Mirror generate_full's Config overrides so preview matches the final build.
+    saved = (Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, Config.DOOR_WIDTH, Config.DOOR_HEIGHT)
+    Config.WINDOW_WIDTH  = getattr(scene, 'wbtk_building_window_width', 1.0)
+    Config.WINDOW_HEIGHT = getattr(scene, 'wbtk_building_window_height', 1.0)
+    Config.DOOR_WIDTH    = getattr(scene, 'wbtk_building_door_width', 1.2)
+    Config.DOOR_HEIGHT   = getattr(scene, 'wbtk_building_door_height', 2.5)
 
-    for b in info:
-        _build_block_walls(bm, b, info, add_slabs, add_roof, thickness, GeometryBuildings)
+    try:
+        bm = bmesh.new()
+        info = bm_data.all_bounds()
+
+        for b in info:
+            _build_block_walls(bm, b, info, add_slabs, add_roof, thickness, GeometryBuildings)
+    finally:
+        Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, Config.DOOR_WIDTH, Config.DOOR_HEIGHT = saved
 
     return bm
 
@@ -54,21 +64,22 @@ def generate_full(scene):
 
     # Temp config overrides
     saved = (Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, Config.DOOR_WIDTH, Config.DOOR_HEIGHT)
-    Config.WINDOW_WIDTH = getattr(scene, 'wbtk_building_window_width', 1.5)
+    Config.WINDOW_WIDTH = getattr(scene, 'wbtk_building_window_width', 1.0)   # fallbacks mirror properties.py (Scale Bible 2026-08-05)
     Config.WINDOW_HEIGHT = getattr(scene, 'wbtk_building_window_height', 1.0)
-    Config.DOOR_WIDTH = getattr(scene, 'wbtk_building_door_width', 1.0)
-    Config.DOOR_HEIGHT = getattr(scene, 'wbtk_building_door_height', 2.0)
+    Config.DOOR_WIDTH = getattr(scene, 'wbtk_building_door_width', 1.2)
+    Config.DOOR_HEIGHT = getattr(scene, 'wbtk_building_door_height', 2.5)
 
-    master = Utils.create_master("BuildMode")
-    origin = Vector((0, 0, 0))
-    bm = bmesh.new()
-    info = bm_data.all_bounds()
+    try:
+        master = Utils.create_master("BuildMode")
+        origin = Vector((0, 0, 0))
+        bm = bmesh.new()
+        info = bm_data.all_bounds()
 
-    for b in info:
-        _build_block_walls(bm, b, info, add_slabs, add_roof, thickness,
-                           GeometryBuildings, door_style, door_in, door_sp)
-
-    Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, Config.DOOR_WIDTH, Config.DOOR_HEIGHT = saved
+        for b in info:
+            _build_block_walls(bm, b, info, add_slabs, add_roof, thickness,
+                               GeometryBuildings, door_style, door_in, door_sp)
+    finally:
+        Config.WINDOW_WIDTH, Config.WINDOW_HEIGHT, Config.DOOR_WIDTH, Config.DOOR_HEIGHT = saved
 
     # Finalize
     wall_obj = OP_GenerateBuildingShell._finalize_bm(
@@ -91,6 +102,30 @@ def generate_full(scene):
 # ─────────────────────────────────────────────────────────────────────────────
 #  INTERNALS
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _build_face_wall(bm, GB, bx, by, bz, length, h, thickness, axis, wtype,
+                     door_style, door_in, door_sp):
+    """One block face. WINDOW faces auto-fit a ROW of windows — same rhythm
+    rule as the parametric shell (AUTO count, min segment = window width
+    + 0.8m) — instead of one centered opening."""
+    n = 1
+    if wtype == 'WINDOW':
+        n = max(1, int(length / (Config.WINDOW_WIDTH + 0.8)))
+    if n <= 1:
+        GB.build_shell_wall(bm, bx, by, bz, length, h, thickness, axis,
+            wall_type=wtype, door_style=door_style, door_inset=door_in,
+            door_splay=door_sp)
+        return
+    seg = length / n
+    for i in range(n):
+        off = i * seg
+        if axis == 'X':
+            GB.build_shell_wall(bm, bx + off, by, bz, seg, h, thickness, 'X',
+                                wall_type='WINDOW')
+        else:
+            GB.build_shell_wall(bm, bx, by + off, bz, seg, h, thickness, 'Y',
+                                wall_type='WINDOW')
+
 
 def _build_block_walls(bm, b, all_info, add_slabs, add_roof, thickness,
                        GB, door_style='FLAT', door_in=0.2, door_sp=30.0):
@@ -148,11 +183,11 @@ def _build_block_walls(bm, b, all_info, add_slabs, add_roof, thickness,
         wtype = walls.get(face, "SOLID")
 
         if abs(dy) < 0.001:
-            GB.build_shell_wall(bm, min(sx,ex), sy, bz, abs(dx), h, thickness, 'X',
-                wall_type=wtype, door_style=door_style, door_inset=door_in, door_splay=door_sp)
+            _build_face_wall(bm, GB, min(sx,ex), sy, bz, abs(dx), h, thickness, 'X',
+                             wtype, door_style, door_in, door_sp)
         elif abs(dx) < 0.001:
-            GB.build_shell_wall(bm, sx, min(sy,ey), bz, abs(dy), h, thickness, 'Y',
-                wall_type=wtype, door_style=door_style, door_inset=door_in, door_splay=door_sp)
+            _build_face_wall(bm, GB, sx, min(sy,ey), bz, abs(dy), h, thickness, 'Y',
+                             wtype, door_style, door_in, door_sp)
         else:
             GB.build_angled_wall(bm, (sx,sy), (ex,ey), bz, h, thickness, wtype,
                 door_style=door_style, door_inset=door_in, door_splay=door_sp)

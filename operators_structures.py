@@ -24,10 +24,10 @@ class OP_GenerateWall(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixed properties
-        length_tiles = scene.wbtk_wall_length
-        wall_height = scene.wbtk_wall_height
-        wall_thickness = scene.wbtk_wall_thickness
-        wall_type = scene.wbtk_wall_type
+        length_tiles = getattr(scene, 'wbtk_wall_length', 5)
+        wall_height = getattr(scene, 'wbtk_wall_height', Config.DEFAULT_WALL_HEIGHT)
+        wall_thickness = getattr(scene, 'wbtk_wall_thickness', Config.WALL_THICKNESS)
+        wall_type = getattr(scene, 'wbtk_wall_type', 'SOLID')
 
         if length_tiles <= 0:
             return self.report_warning("Wall length must be > 0.")
@@ -80,10 +80,10 @@ class OP_GenerateRoom(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Use wbtk_ prefixes
-        width_tiles = scene.wbtk_room_width
-        length_tiles = scene.wbtk_room_length
+        width_tiles = getattr(scene, 'wbtk_room_width', 5)
+        length_tiles = getattr(scene, 'wbtk_room_length', 5)
         # Use default wall height from config if not overridden by a specific room height property
-        wall_height = scene.wbtk_wall_height # Assuming wall_height property applies here too
+        wall_height = getattr(scene, 'wbtk_wall_height', Config.DEFAULT_WALL_HEIGHT) # Assuming wall_height property applies here too
 
         if width_tiles <= 0 or length_tiles <= 0:
             return self.report_warning("Room dimensions must be > 0.")
@@ -110,7 +110,7 @@ class OP_GenerateRoom(OP_BaseGenerator):
             (Vector((0, 0, 0)), length, 'Y'),          # West Wall (adjust location)
         ]
 
-        wall_thickness = scene.wbtk_wall_thickness
+        wall_thickness = getattr(scene, 'wbtk_wall_thickness', Config.WALL_THICKNESS)
 
         # --- Refactored Wall Generation ---
         # South Wall (Origin 0,0,0 - Extends along +X)
@@ -173,21 +173,21 @@ class OP_GenerateBuildingShell(OP_BaseGenerator):
 
         # --- Read Properties ---
         try:
-            width_tiles = self.override_width if self.override_width > 0 else scene.wbtk_building_width
-            depth_tiles = scene.wbtk_building_depth
-            floors      = self.override_floors if self.override_floors > 0 else scene.wbtk_building_floors
-            add_roof    = scene.wbtk_building_add_roof
-            floor_height = scene.wbtk_building_floor_height
-            add_slabs   = scene.wbtk_building_add_floor_slabs
-            front_type  = scene.wbtk_building_front_wall_type
-            back_type   = scene.wbtk_building_back_wall_type
-            left_type   = scene.wbtk_building_left_wall_type
-            right_type  = scene.wbtk_building_right_wall_type
-            add_ledge   = scene.wbtk_building_add_ledge
-            ledge_every_n = scene.wbtk_building_ledge_every_n_floors
-            ledge_height  = scene.wbtk_building_ledge_height
-            ledge_depth   = scene.wbtk_building_ledge_depth
-            ledge_offset_z = scene.wbtk_building_ledge_offset_z
+            width_tiles = self.override_width if self.override_width > 0 else getattr(scene, 'wbtk_building_width', 4)
+            depth_tiles = getattr(scene, 'wbtk_building_depth', 4)
+            floors      = self.override_floors if self.override_floors > 0 else getattr(scene, 'wbtk_building_floors', 2)
+            add_roof    = getattr(scene, 'wbtk_building_add_roof', True)
+            floor_height = getattr(scene, 'wbtk_building_floor_height', Config.DEFAULT_WALL_HEIGHT)
+            add_slabs   = getattr(scene, 'wbtk_building_add_floor_slabs', True)
+            front_type  = getattr(scene, 'wbtk_building_front_wall_type', 'DOOR')
+            back_type   = getattr(scene, 'wbtk_building_back_wall_type', 'WINDOW')
+            left_type   = getattr(scene, 'wbtk_building_left_wall_type', 'WINDOW')
+            right_type  = getattr(scene, 'wbtk_building_right_wall_type', 'WINDOW')
+            add_ledge   = getattr(scene, 'wbtk_building_add_ledge', False)
+            ledge_every_n = getattr(scene, 'wbtk_building_ledge_every_n_floors', 1)
+            ledge_height  = getattr(scene, 'wbtk_building_ledge_height', 0.15)
+            ledge_depth   = getattr(scene, 'wbtk_building_ledge_depth', 0.15)
+            ledge_offset_z = getattr(scene, 'wbtk_building_ledge_offset_z', 0.0)
             add_corners  = getattr(scene, 'wbtk_building_add_corners', False)
             corner_width = getattr(scene, 'wbtk_building_corner_width', 0.3)
             corner_prot  = getattr(scene, 'wbtk_building_corner_protrusion', 0.15)
@@ -211,12 +211,12 @@ class OP_GenerateBuildingShell(OP_BaseGenerator):
             win_chance   = getattr(scene, 'wbtk_building_window_chance', 0.6)
             # Window configuration
             win_count_mode = getattr(scene, 'wbtk_building_window_count', 'AUTO')
-            custom_win_w   = getattr(scene, 'wbtk_building_window_width', 1.5)
+            custom_win_w   = getattr(scene, 'wbtk_building_window_width', 1.0)
             custom_win_h   = getattr(scene, 'wbtk_building_window_height', 1.0)
             # Door configuration
             door_style_val = getattr(scene, 'wbtk_building_door_style', 'RECESSED')
-            custom_door_w  = getattr(scene, 'wbtk_building_door_width', 1.0)
-            custom_door_h  = getattr(scene, 'wbtk_building_door_height', 2.0)
+            custom_door_w  = getattr(scene, 'wbtk_building_door_width', 1.2)
+            custom_door_h  = getattr(scene, 'wbtk_building_door_height', 2.5)
             door_inset_val = getattr(scene, 'wbtk_building_door_inset', 0.2)
             door_splay_val = getattr(scene, 'wbtk_building_door_splay', 30.0)
             # Shape and wing configuration
@@ -335,59 +335,60 @@ class OP_GenerateBuildingShell(OP_BaseGenerator):
             Config.DOOR_WIDTH = custom_door_w
             Config.DOOR_HEIGHT = custom_door_h
 
-            def _calc_win_count(wall_length, mode, win_w):
-                if mode == 'AUTO':
-                    min_segment = win_w + 0.8
-                    return max(1, int(wall_length / min_segment))
-                else:
-                    return int(mode)
-
-            def _build_multi_window_wall(bm_target, bx, by, z, wall_len, wall_h, t, ax, wtype, n_wins):
-                if wtype != 'WINDOW' or n_wins <= 1:
-                    GeometryBuildings.build_shell_wall(bm_target, bx, by, z, wall_len, wall_h, t, ax,
-                        wall_type=wtype, door_style=door_style_val,
-                        door_inset=door_inset_val, door_splay=door_splay_val)
-                    return
-                seg_len = wall_len / n_wins
-                for i in range(n_wins):
-                    offset = i * seg_len
-                    if ax == 'X':
-                        GeometryBuildings.build_shell_wall(bm_target, bx + offset, by, z, seg_len, wall_h, t, ax, wall_type='WINDOW')
+            try:
+                def _calc_win_count(wall_length, mode, win_w):
+                    if mode == 'AUTO':
+                        min_segment = win_w + 0.8
+                        return max(1, int(wall_length / min_segment))
                     else:
-                        GeometryBuildings.build_shell_wall(bm_target, bx, by + offset, z, seg_len, wall_h, t, ax, wall_type='WINDOW')
+                        return int(mode)
 
-            # --- Get footprint wall segments ---
-            wall_segs = get_wall_segments(building_shape, width, depth, wing_w, wing_d,
-                                          af, ab, al, ar, aw,
-                                          corner_cut_size, corner_cut_pos, floor_idx,
-                                          wing_position, courtyard_wtype)
+                def _build_multi_window_wall(bm_target, bx, by, z, wall_len, wall_h, t, ax, wtype, n_wins):
+                    if wtype != 'WINDOW' or n_wins <= 1:
+                        GeometryBuildings.build_shell_wall(bm_target, bx, by, z, wall_len, wall_h, t, ax,
+                            wall_type=wtype, door_style=door_style_val,
+                            door_inset=door_inset_val, door_splay=door_splay_val)
+                        return
+                    seg_len = wall_len / n_wins
+                    for i in range(n_wins):
+                        offset = i * seg_len
+                        if ax == 'X':
+                            GeometryBuildings.build_shell_wall(bm_target, bx + offset, by, z, seg_len, wall_h, t, ax, wall_type='WINDOW')
+                        else:
+                            GeometryBuildings.build_shell_wall(bm_target, bx, by + offset, z, seg_len, wall_h, t, ax, wall_type='WINDOW')
 
-            for seg in wall_segs:
-                if seg['angled']:
-                    # Diagonal wall (corner cut)
-                    wtype = seg['wall_type']
-                    if floor_idx > 0 and wtype == 'DOOR':
-                        wtype = 'SOLID'
-                    GeometryBuildings.build_angled_wall(
-                        bm_walls, seg['start'], seg['end'],
-                        current_z, floor_height, thickness, wtype,
-                        door_style=door_style_val, door_inset=door_inset_val,
-                        door_splay=door_splay_val)
-                else:
-                    wtype = seg['wall_type']
-                    # Upper floors: no doors
-                    if floor_idx > 0 and wtype == 'DOOR':
-                        wtype = 'SOLID'
-                    n_wins = _calc_win_count(seg['length'], win_count_mode, custom_win_w) if wtype == 'WINDOW' else 1
-                    _build_multi_window_wall(bm_walls, seg['bx'], seg['by'], current_z,
-                                             seg['length'], floor_height, thickness,
-                                             seg['axis'], wtype, n_wins)
+                # --- Get footprint wall segments ---
+                wall_segs = get_wall_segments(building_shape, width, depth, wing_w, wing_d,
+                                              af, ab, al, ar, aw,
+                                              corner_cut_size, corner_cut_pos, floor_idx,
+                                              wing_position, courtyard_wtype)
 
-            # Restore Config
-            Config.WINDOW_WIDTH = orig_win_w
-            Config.WINDOW_HEIGHT = orig_win_h
-            Config.DOOR_WIDTH = orig_door_w
-            Config.DOOR_HEIGHT = orig_door_h
+                for seg in wall_segs:
+                    if seg['angled']:
+                        # Diagonal wall (corner cut)
+                        wtype = seg['wall_type']
+                        if floor_idx > 0 and wtype == 'DOOR':
+                            wtype = 'SOLID'
+                        GeometryBuildings.build_angled_wall(
+                            bm_walls, seg['start'], seg['end'],
+                            current_z, floor_height, thickness, wtype,
+                            door_style=door_style_val, door_inset=door_inset_val,
+                            door_splay=door_splay_val)
+                    else:
+                        wtype = seg['wall_type']
+                        # Upper floors: no doors
+                        if floor_idx > 0 and wtype == 'DOOR':
+                            wtype = 'SOLID'
+                        n_wins = _calc_win_count(seg['length'], win_count_mode, custom_win_w) if wtype == 'WINDOW' else 1
+                        _build_multi_window_wall(bm_walls, seg['bx'], seg['by'], current_z,
+                                                 seg['length'], floor_height, thickness,
+                                                 seg['axis'], wtype, n_wins)
+            finally:
+                # Restore Config
+                Config.WINDOW_WIDTH = orig_win_w
+                Config.WINDOW_HEIGHT = orig_win_h
+                Config.DOOR_WIDTH = orig_door_w
+                Config.DOOR_HEIGHT = orig_door_h
 
         # --- Roof ---
         if add_roof:
@@ -469,9 +470,9 @@ class OP_GenerateBuildingRow(OP_BaseGenerator):
         direction = getattr(scene, 'wbtk_batch_direction', 'X')
         vary_f    = getattr(scene, 'wbtk_batch_vary_floors', True)
         vary_w    = getattr(scene, 'wbtk_batch_vary_width', True)
-        base_w    = scene.wbtk_building_width
-        base_d    = scene.wbtk_building_depth
-        base_f    = scene.wbtk_building_floors
+        base_w    = getattr(scene, 'wbtk_building_width', 4)
+        base_d    = getattr(scene, 'wbtk_building_depth', 4)
+        base_f    = getattr(scene, 'wbtk_building_floors', 2)
         base_seed = getattr(scene, 'wbtk_building_seed', 1)
         use_seed  = getattr(scene, 'wbtk_building_use_seed', False)
 
@@ -532,16 +533,16 @@ class OP_GenerateSupportTower(OP_BaseGenerator):
     def execute(self, context):
         scene = context.scene
         # Read tower properties using wbtk_ prefix
-        height = scene.wbtk_tower_height
-        shape = scene.wbtk_tower_shape
-        dimension = scene.wbtk_tower_dimension
-        segments = scene.wbtk_tower_segments
-        add_base = scene.wbtk_tower_add_base
-        base_height = scene.wbtk_tower_base_height
-        base_factor = scene.wbtk_tower_base_size_factor
-        add_cap = scene.wbtk_tower_add_cap
-        cap_height = scene.wbtk_tower_cap_height
-        cap_factor = scene.wbtk_tower_cap_size_factor
+        height = getattr(scene, 'wbtk_tower_height', 5.0)
+        shape = getattr(scene, 'wbtk_tower_shape', 'SQUARE')
+        dimension = getattr(scene, 'wbtk_tower_dimension', 0.5)
+        segments = getattr(scene, 'wbtk_tower_segments', 16)
+        add_base = getattr(scene, 'wbtk_tower_add_base', False)
+        base_height = getattr(scene, 'wbtk_tower_base_height', 0.3)
+        base_factor = getattr(scene, 'wbtk_tower_base_size_factor', 1.5)
+        add_cap = getattr(scene, 'wbtk_tower_add_cap', False)
+        cap_height = getattr(scene, 'wbtk_tower_cap_height', 0.2)
+        cap_factor = getattr(scene, 'wbtk_tower_cap_size_factor', 1.2)
 
         # Validation
         if height <= 0 or dimension <= 0:

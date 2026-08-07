@@ -16,7 +16,7 @@ REGION_PRESETS = {
             'wbtk_building_width': 2,
             'wbtk_building_depth': 3,
             'wbtk_building_floors': 3,
-            'wbtk_building_floor_height': 2.8,
+            'wbtk_building_floor_height': 3.5,  # Scale Bible: floor 350cm [LOCKED] (was 2.8)
             'wbtk_building_shape': 'RECT',
             # Facade
             'wbtk_building_front_wall_type': 'DOOR',
@@ -26,11 +26,11 @@ REGION_PRESETS = {
             # Windows
             'wbtk_building_window_count': 'AUTO',
             'wbtk_building_window_width': 1.0,
-            'wbtk_building_window_height': 0.8,
+            'wbtk_building_window_height': 1.0,  # Asset Bible: 100x100 insert (was 0.8)
             # Doors
             'wbtk_building_door_style': 'RECESSED',
-            'wbtk_building_door_width': 1.0,
-            'wbtk_building_door_height': 2.0,
+            'wbtk_building_door_width': 1.2,   # Scale Bible: door 120cm [LOCKED] (was 1.0)
+            'wbtk_building_door_height': 2.5,  # Scale Bible: door 250cm [LOCKED] (was 2.0)
             'wbtk_building_door_inset': 0.15,
             # Enhancements
             'wbtk_building_add_corners': False,

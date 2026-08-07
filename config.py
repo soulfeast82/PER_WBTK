@@ -24,16 +24,16 @@ class Config:
     LADDER_RUNG_RADIUS = RAIL_RADIUS * 0.75
 
     # --- Building Defaults ---
-    WALL_THICKNESS = 0.2 * SCALE
-    DEFAULT_WALL_HEIGHT = 3.0 * SCALE
-    WINDOW_WIDTH = 1.5 * SCALE
+    WALL_THICKNESS = 0.2 * SCALE          # Scale Bible: door slab 20cm [LOCKED]
+    DEFAULT_WALL_HEIGHT = 3.5 * SCALE     # Scale Bible: building floor 350cm [LOCKED] (was 3.0)
+    WINDOW_WIDTH = 1.0 * SCALE            # Asset Bible: window insert 100x100 (was 1.5)
     WINDOW_HEIGHT = 1.0 * SCALE
     WINDOW_SILL_HEIGHT = 1.0 * SCALE
     # +++ ADD THESE WINDOW DETAIL CONSTANTS +++
     WINDOW_FRAME_THICKNESS = 0.05 * SCALE # How thick the inset border is
     WINDOW_INSET_DEPTH = 0.2 * SCALE     # How far back the window surface is set
-    DOOR_WIDTH = 1.0 * SCALE
-    DOOR_HEIGHT = 2.0 * SCALE
+    DOOR_WIDTH = 1.2 * SCALE              # Scale Bible: door 120cm [LOCKED] (was 1.0)
+    DOOR_HEIGHT = 2.5 * SCALE             # Scale Bible: door 250cm [LOCKED] (was 2.0)
     DOOR_INSET_DEPTH = 0.2 * SCALE
     DOOR_SPLAY_ANGLE = 30.0  # degrees for angled jambs
 
