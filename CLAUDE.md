@@ -50,8 +50,33 @@ Location in Blender: View3D > Sidebar > World Builder
     verification passed; `py_compile` clean; L400 seed write + dead 'YZ'
     branch left for Session 6 as planned. **Smoke-tested + committed
     2026-07-07.**
+  - ✅ Sitting 3 (2026-07-07): `operators_structures.py` — 36 reads
+    converted (wall 4, room 4, shell 15, row 3, tower 10);
+    `Config.DEFAULT_WALL_HEIGHT` / `Config.WALL_THICKNESS` symbols mirrored;
+    override ternaries and the 47 pre-existing guards untouched. Three-lens
+    verification passed; `py_compile` clean. Shell's try/except wrapper now
+    fully dead → Session 6 removal. **Viewport smoke test passed
+    2026-08-06; committed `202381e`.** Backup at
+    `operators_structures.py.bak2` (`.bak` is the sitting-3 rollback and was
+    preserved).
   - 🔲 Remaining raw crash-surface reads: foliage 31, cables 24,
-    props 21, structures 36, block_composer 4, ui.py 24 → **140 reads.**
+    props 21, block_composer 4, ui.py 24 → **104 reads.**
+    ⚠️ **Scope note (2026-08-08):** 76 of these 104 sit in `foliage`,
+    `cables` and `props` — the decorator generators the Strategic Pivot
+    handed to **BagaPie** — and `block_composer` has "no new work planned".
+    Only `ui.py`'s 24 clearly still earn their keep, because ui.py is Build
+    Mode's panel and Build Mode is pivot item #1. Worth deciding whether
+    the rest is v1.0 scope at all before spending sessions on it.
+- ✅ **Flow pass (2026-08-06)** — Build Mode window rhythm: `bm_generate.py`
+  gained `_build_face_wall`, so WINDOW faces auto-fit a ROW of windows
+  (AUTO count, min segment = window width + 0.8m) instead of one centred
+  opening — the same rule the parametric shell uses. `build_preview_bm` now
+  applies the same Config overrides as `generate_full`, so live preview
+  matches the final build in window count AND window/door size (it
+  previously ignored the user's panel values entirely). try/finally added to
+  all four Config/scene override sites. Scale-Bible fallbacks aligned in
+  `operators_structures.py`. Viewport-verified, committed `202381e`. Record:
+  `CLAUDE_WBTK_flow_pass_BuildMode.md`.
 - 🔲 **Session 6** — Wall style enum drop + Build Mode behavioral pass +
   accumulated fixes
 - 🔲 **Session 7** — Detail stamps behavioral pass
@@ -61,11 +86,24 @@ Location in Blender: View3D > Sidebar > World Builder
 operators_preview.py's 142); 214 raw reads remain (190 in operators + 24 in
 ui.py draw code); 34 raw writes tracked.**
 
-**Git state:** PER_WBTK now carries the session-5b commit on top of
-`580edff` (session 3) and `7860f38` (baseline). The pre-existing
-session-2-era and partial-sweep changes in other files remain uncommitted
-working-tree changes until their sessions land. The 4-commit history in the
-previous doc was fiction; the WorkingFiles clone is stale at `580edff`.
+**Git state (re-verified 2026-08-08):** head is `202381e` (flow pass) on top
+of `a59fab8` (5c-2 pipes), `0340943` (5c-1 walkways), `d62ddd9` (5b),
+`580edff` (session 3), `7860f38` (baseline). The 4-commit history in the
+older doc was fiction; the WorkingFiles clone is stale at `580edff`.
+
+⚠️ **Correction — there is NO uncommitted code drift.** This doc previously
+claimed "pre-existing session-2-era and partial-sweep changes in other files
+remain uncommitted working-tree changes." That is **false and was never
+true in this clone.** `git status` lists 16 .py files as modified, but every
+one is **byte-identical to HEAD** once normalised — verified 2026-08-08 by
+comparing `git hash-object` against `git rev-parse HEAD:<file>` for all 16.
+They are flagged only because `core.autocrlf=true` with no `.gitattributes`,
+so on-disk LF endings don't match the CRLF a checkout would write.
+
+**Do not treat that file list as pending work.** Only `CLAUDE.md` ever had
+real uncommitted content. Optional cleanup: add a `.gitattributes` with
+`*.py text eol=lf` (or run `git add --renormalize .`) to stop the phantom
+modifications, which otherwise keep masquerading as lost sweep work.
 
 ---
 
@@ -83,15 +121,24 @@ previous doc was fiction; the WorkingFiles clone is stale at `580edff`.
    Blender 5.0 requires the keyword form — if true, both calls raise
    TypeError at runtime). Verify on Blender 5.0 and convert to
    `angle=` keyword. (Previous doc claimed this shipped in "5a" — absent.)
-3. **Block Composer can clobber user settings.** It passes parameters by
-   mutating shared `wbtk_building_*` scene props (override L100–105, restore
-   L114–119) with **no try/finally** — an exception mid-generation leaves the
-   user's building panel values overwritten.
+3. ~~**Block Composer can clobber user settings.**~~ **CLOSED 2026-08-06
+   (flow pass):** the shell-generate call in `operators_block_composer.py` is
+   now wrapped in try/finally with the six-line scene-prop restore in the
+   `finally`, so an exception mid-generation can no longer leave the user's
+   building panel overwritten. The same guard was applied to the other two
+   Config-override sites (`bm_generate.generate_full`,
+   `operators_structures.py` per-floor walls) plus a fourth in
+   `build_preview_bm`. Viewport-verified; committed `202381e`.
 4. Minor: `operators_pipes.py` has an unreachable `'YZ'` bend-plane branch
    (L218–220; enum defines only XY/XZ) and an unused `flange_spacing` read
    (L193). `operators_props.py:89` reads `wbtk_barrel_rib_width` and never
    uses it. `wbtk_cable_between_mode` is defined in properties.py but read
    nowhere.
+5. Minor (found in 5c sitting-3 verification): `operators_preview.py`
+   L287–290 / L346–349 use `'SOLID'` getattr fallbacks for the four
+   building wall-type props, but properties.py defaults are 'DOOR' (front)
+   / 'WINDOW' (back/left/right). Harmless while props register normally;
+   align the fallbacks in Session 6 for consistency.
 
 ---
 
@@ -361,8 +408,9 @@ all names verified to exist in properties.py.
 
 **Disposition:** wrap in `hasattr` guards or try/except AttributeError in
 Session 6 if scope permits; else defer to v1.0.1. Template pattern exists in
-the foliage preset loader. Block Composer's 12 override/restore writes should
-additionally gain try/finally (see Live bug #3).
+the foliage preset loader. Block Composer's override/restore writes already
+gained their try/finally in the 2026-08-06 flow pass (Live bug #3 CLOSED);
+the remaining exposure there is the writes themselves, not the guard.
 
 ### Pre-existing geometry / behavior issues (Session 6 / v1.0.1)
 
@@ -443,7 +491,6 @@ repro.
   `wbtk_bm_grid_subdivs`, `wbtk_bm_block_color`
 - Pipe bend flange orientation fix (geometry_pipes.py)
 - UCX visibility fix for cables-between-selected
-- Block Composer try/finally around override/restore writes
 - Build Mode behavioral checklist: Toggle Mode edge cases, Mirror X/Y
   correctness, Clear All completeness
 - 34 unguarded writes if time permits; else defer to v1.0.1
@@ -518,8 +565,8 @@ session start).
    (several files have 20+ reads).
 6. 🔲 **Session 6** — Wall style enum drop + Build Mode behavioral pass +
    accumulated fixes (material leak, right-click collision, grid
-   live-update, pipe bend, UCX, dead code, block-composer try/finally,
-   possibly the 34 writes)
+   live-update, pipe bend, UCX, dead code, possibly the 34 writes
+   — block-composer try/finally already landed 2026-08-06)
 7. 🔲 **Session 7** — Detail stamps behavioral pass + UX polish
 8. 🔲 **Session 8** — Release prep (README, LICENSE, version bump,
    documentation, final smoke test)
