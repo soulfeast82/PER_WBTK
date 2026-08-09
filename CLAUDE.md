@@ -225,7 +225,14 @@ separately. Worth designing deliberately in v1.1.
 Two third-party GN tools own generation duties:
 
 - **Buildify 1.0** = the building engine. Verified working on Blender 5.1
-  (2026-07-06): loads, generates, live-edits.
+  (2026-07-06): loads, generates, live-edits. **Re-verified 2026-08-08** by
+  driving the `building` node tree directly.
+  ⚠️ **It is NOT an addon — it is a geometry-nodes library inside a .blend**
+  (`Downloads/buildify_1.0.blend`). There is nothing to install; you append
+  the node groups and drive a GN modifier on flat base geometry. A search of
+  the addon list, extensions folder and asset libraries finds nothing, which
+  is expected and not a missing dependency. **That file is now a load-bearing
+  dependency sitting in `Downloads` — it needs a real home.**
 - **BagaPie v11.0.5** = the greeble/scatter engine (pipes, cables, fences,
   arrays, scattering).
 
@@ -237,8 +244,20 @@ WBTK = the Project Earl Ray brain:
    module-kit collections + parameters per district.
 3. **Kit Validator (new op):** enforces Buildify's module contract — applied
    rotation/scale, bottom-center origins, pillar collection order
-   flat→CC→CV, +Y facing, single module size per building, 2m grid
-   multiples. Reports violations by name.
+   flat→CC→CV, +Y facing, single module size per building, ~~2m grid
+   multiples~~. Reports violations by name.
+   **Corrected 2026-08-08 against the actual manual + live node tree:**
+   "2m grid multiples" is **not a Buildify rule** — the manual only advises
+   "multiples of grid units of your choice" to avoid horizontal stretching.
+   The one hard dimensional rule is **one module size per building**.
+   `Module width`/`Module height` are plain exposed floats with no
+   quantisation: driving height to 3.5 places floors at 0/3.5/7/10.5 with
+   no snap, so **the 350 storey is safe** (closes
+   `HEIGHT_2M_RULING_v1.md` §3). Two gotchas the validator must also cover:
+   overlapping base-geometry edges flip wall orientation (a real risk for
+   abutting Build Mode blocks — weld or nudge by 1e-5), and floor count is
+   a `building:levels` vertex-group weight equal to floors ÷ 100. Full
+   contract + migration path: `_gamedocs/BUILDIFY_INTEGRATION_v1.md`.
 4. **Buildify export chain** (Realize Instances → visual geometry to mesh →
    UV attribute convert → FBX) **extends `operators_ue_pipeline.py`** rather
    than living as a new module.
