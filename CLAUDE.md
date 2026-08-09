@@ -228,11 +228,12 @@ Two third-party GN tools own generation duties:
   (2026-07-06): loads, generates, live-edits. **Re-verified 2026-08-08** by
   driving the `building` node tree directly.
   ⚠️ **It is NOT an addon — it is a geometry-nodes library inside a .blend**
-  (`Downloads/buildify_1.0.blend`). There is nothing to install; you append
+  (`Blender_Plugins/Buildify_1.0/buildify_1.0.blend`, with the manual beside it). There is
+  nothing to install; you append
   the node groups and drive a GN modifier on flat base geometry. A search of
   the addon list, extensions folder and asset libraries finds nothing, which
-  is expected and not a missing dependency. **That file is now a load-bearing
-  dependency sitting in `Downloads` — it needs a real home.**
+  is expected and not a missing dependency. Moved out of `Downloads` and
+  committed 2026-08-08 so a stray cleanup cannot delete the building engine.
 - **BagaPie v11.0.5** = the greeble/scatter engine (pipes, cables, fences,
   arrays, scattering).
 
