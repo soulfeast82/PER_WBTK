@@ -74,6 +74,9 @@ from . import operators_region_dna
 # Block Composer (Phase 2)
 from . import operators_block_composer
 
+# Buildify bridge (Strategic Pivot item #1: footprints -> Buildify)
+from . import operators_buildify
+
 # Footprint Painter
 
 # Custom Builder (Viewport Block Painter)
@@ -101,6 +104,7 @@ _classes_to_register = (
     *operators_trim_uv._classes_to_register,
     *operators_region_dna._classes_to_register,
     *operators_block_composer._classes_to_register,
+    *operators_buildify._classes_to_register,
     *bm_operators._classes,
     *bm_details._classes,
     *ui._classes_to_register,

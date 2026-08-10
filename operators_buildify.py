@@ -1,0 +1,229 @@
+# World_Building_Toolkit/operators_buildify.py
+# WBTK -> Buildify bridge.
+#
+# Exports Build Mode block footprints as flat base geometry for Buildify's
+# `building` geometry-node modifier, with the `building:levels` vertex group
+# Buildify reads to decide floor counts.
+#
+# Contract + rationale: _gamedocs/BUILDIFY_INTEGRATION_v1.md
+
+import math
+
+import bpy
+import bmesh
+
+from .config import Config
+from .utils import Utils
+from . import bm_data
+
+FOOTPRINT_NAME = "WBTK_BFY_Footprint"
+
+# Buildify reads this vertex group by exact name. Do not rename.
+LEVELS_VGROUP = "building:levels"
+
+# Buildify stores floor count as weight = floors / 100, so 100 is the ceiling.
+LEVELS_DIVISOR = 100.0
+MAX_FLOORS = 100
+
+# Buildify's own documented workaround for overlapping base-geometry edges,
+# which otherwise flip wall orientation with no error. Adjacent Build Mode
+# blocks that belong to DIFFERENT buildings would share exact coordinates, so
+# each building is shrunk toward its own centroid by this much. 10 microns.
+NUDGE_M = 1e-5
+
+# Coincident verts WITHIN one building are welded instead, which removes the
+# shared edge entirely rather than hiding it.
+WELD_DIST = 1e-4
+
+# Ruled 2026-08-08: Buildify buildings use one module, 400x350. Footprint runs
+# that are not multiples of the module width get stretched modules.
+BFY_MODULE_WIDTH = 4.0
+EDGE_TOL = 1e-3
+
+
+def _block_perimeter(b):
+    """Footprint outline of one block, honouring chamfers.
+
+    NOTE: mirrors the perimeter maths in bm_generate._build_block_walls. Kept
+    local so the working generate path is not touched by this new operator.
+    Fold both onto a shared helper in bm_data once this is viewport-verified.
+    """
+    bx, by = b['x0'], b['y0']
+    w, d = b['w'], b['d']
+    chamfers = b['data'].get("chamfers", [])
+    cs = b['data'].get("chamfer_size", 1.0)
+
+    corners = [(bx, by), (bx + w, by), (bx + w, by + d), (bx, by + d)]
+    names = ["sw", "se", "ne", "nw"]
+    if not chamfers:
+        return corners
+
+    per = []
+    for ci in range(4):
+        cx, cy = corners[ci]
+        if names[ci] in chamfers:
+            px, py = corners[(ci - 1) % 4]
+            nx, ny = corners[(ci + 1) % 4]
+            dpx, dpy = px - cx, py - cy
+            dnx, dny = nx - cx, ny - cy
+            dl_p = math.sqrt(dpx * dpx + dpy * dpy)
+            dl_n = math.sqrt(dnx * dnx + dny * dny)
+            if dl_p > 0.01 and dl_n > 0.01:
+                c = min(cs, dl_p * 0.49, dl_n * 0.49)
+                per.append((cx + dpx / dl_p * c, cy + dpy / dl_p * c))
+                per.append((cx + dnx / dl_n * c, cy + dny / dl_n * c))
+            else:
+                per.append((cx, cy))
+        else:
+            per.append((cx, cy))
+    return per
+
+
+def _floors_for(b, floor_h):
+    """Block height -> Buildify floor count."""
+    h = float(b.get('h', 0.0) or 0.0)
+    if floor_h <= 0.0:
+        return 1
+    return max(1, min(MAX_FLOORS, int(round(h / floor_h))))
+
+
+def _group_key(b, floor_h):
+    """Blocks merge into one building only if they share an elevation AND a
+    floor count. Same elevation but different heights are genuinely different
+    buildings, and Buildify needs them as separate geometry."""
+    return (round(float(b['z0']), 4), _floors_for(b, floor_h))
+
+
+def _build_group(blocks, z):
+    """One building: block rectangles -> welded, dissolved outline."""
+    bm = bmesh.new()
+    for b in blocks:
+        pts = _block_perimeter(b)
+        if len(pts) < 3:
+            continue
+        try:
+            bm.faces.new([bm.verts.new((p[0], p[1], z)) for p in pts])
+        except ValueError:
+            pass  # duplicate face, harmless
+    if bm.verts:
+        bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=WELD_DIST)
+    if bm.faces:
+        # Dissolving interior faces removes the shared edges between abutting
+        # blocks, which is the real fix for Buildify's overlapping-edge bug.
+        bmesh.ops.dissolve_faces(bm, faces=bm.faces[:], use_verts=True)
+    return bm
+
+
+def _shrink_to_centroid(bm, amount):
+    """Separate this building from any neighbour that touches it exactly."""
+    if not bm.verts or amount <= 0.0:
+        return
+    n = len(bm.verts)
+    cx = sum(v.co.x for v in bm.verts) / n
+    cy = sum(v.co.y for v in bm.verts) / n
+    for v in bm.verts:
+        dx, dy = v.co.x - cx, v.co.y - cy
+        L = math.hypot(dx, dy)
+        if L > 1e-9:
+            v.co.x -= dx / L * amount
+            v.co.y -= dy / L * amount
+
+
+def _non_module_edges(verts, faces):
+    """Axis-aligned outline runs that are not multiples of the module width.
+    Buildify stretches modules to fit, so these are a quality warning."""
+    bad = 0
+    seen = set()
+    for f in faces:
+        n = len(f)
+        for i in range(n):
+            a, b = f[i], f[(i + 1) % n]
+            key = (min(a, b), max(a, b))
+            if key in seen:
+                continue
+            seen.add(key)
+            ax, ay, _ = verts[a]
+            bx, by, _ = verts[b]
+            dx, dy = abs(bx - ax), abs(by - ay)
+            if dx < EDGE_TOL or dy < EDGE_TOL:      # axis-aligned run
+                length = max(dx, dy)
+                if length > EDGE_TOL:
+                    rem = math.fmod(length + EDGE_TOL, BFY_MODULE_WIDTH)
+                    if abs(rem - EDGE_TOL) > EDGE_TOL * 2:
+                        bad += 1
+    return bad
+
+
+class OP_ExportBuildifyFootprints(bpy.types.Operator):
+    """Export Build Mode block footprints as flat base geometry for Buildify"""
+    bl_idname = "wbtk.export_buildify_footprints"
+    bl_label = "Export Footprints for Buildify"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        scene = context.scene
+        info = bm_data.all_bounds()
+        if not info:
+            self.report({'WARNING'}, "No Build Mode blocks to export.")
+            return {'CANCELLED'}
+
+        floor_h = getattr(Config, 'DEFAULT_WALL_HEIGHT', 3.5) or 3.5
+
+        grouped = {}
+        for b in info:
+            grouped.setdefault(_group_key(b, floor_h), []).append(b)
+
+        all_verts, all_faces, spans = [], [], []
+        for (z, floors), blocks in sorted(grouped.items()):
+            bm = _build_group(blocks, z)
+            _shrink_to_centroid(bm, NUDGE_M)
+            base = len(all_verts)
+            idx = {}
+            for i, v in enumerate(bm.verts):
+                idx[v] = base + i
+                all_verts.append((v.co.x, v.co.y, v.co.z))
+            for f in bm.faces:
+                all_faces.append([idx[v] for v in f.verts])
+            if len(all_verts) > base:
+                spans.append((base, len(all_verts), floors))
+            bm.free()
+
+        if not all_verts:
+            self.report({'WARNING'}, "Blocks produced no footprint geometry.")
+            return {'CANCELLED'}
+
+        old = bpy.data.objects.get(FOOTPRINT_NAME)
+        if old:
+            me_old = old.data
+            bpy.data.objects.remove(old, do_unlink=True)
+            if me_old and me_old.users == 0:
+                bpy.data.meshes.remove(me_old)
+
+        me = bpy.data.meshes.new(FOOTPRINT_NAME + "_Mesh")
+        me.from_pydata(all_verts, [], all_faces)
+        me.update()
+
+        ob = bpy.data.objects.new(FOOTPRINT_NAME, me)
+        Utils.link_to_collection(ob, Config.TARGET_COLLECTION)
+
+        vg = ob.vertex_groups.new(name=LEVELS_VGROUP)
+        for start, end, floors in spans:
+            vg.add(list(range(start, end)), floors / LEVELS_DIVISOR, 'REPLACE')
+
+        stretched = _non_module_edges(all_verts, all_faces)
+        self.report(
+            {'INFO'},
+            "Buildify footprint: %d building(s), %d verts, floors %s"
+            % (len(spans), len(all_verts),
+               ",".join(str(s[2]) for s in spans)))
+        if stretched:
+            self.report(
+                {'WARNING'},
+                "%d outline run(s) are not multiples of %.1fm - Buildify will "
+                "stretch modules there." % (stretched, BFY_MODULE_WIDTH))
+        return {'FINISHED'}
+
+
+_classes_to_register = (
+    OP_ExportBuildifyFootprints,
+)
