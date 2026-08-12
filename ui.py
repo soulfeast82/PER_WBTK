@@ -396,6 +396,12 @@ class WBTK_PT_Structures(WBTK_PanelBase):
             sk.label(text="A=add  S=stack  D=dupe  X=delete")
             sk.label(text="G=generate  I=iso  RClick=menu")
 
+        # --- Buildify bridge (Strategic Pivot item #1) ---
+        box_bm.separator(factor=1.0)
+        row_bfy = box_bm.row()
+        row_bfy.operator("wbtk.export_buildify_footprints",
+                         text="Export Footprints for Buildify", icon='EXPORT')
+
         # --- Cleanup (destructive, always visible in the Build Mode section) ---
         box_bm.separator(factor=2.0)
         row_cleanup = box_bm.row()
