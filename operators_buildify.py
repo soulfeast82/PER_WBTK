@@ -23,7 +23,26 @@ LEVELS_VGROUP = "building:levels"
 
 # Buildify stores floor count as weight = floors / 100, so 100 is the ceiling.
 LEVELS_DIVISOR = 100.0
-MAX_FLOORS = 100
+
+# ⚠️ CALIBRATION (measured 2026-08-09, do not "simplify" this away).
+# The declared level count is NOT the number of wall storeys placed. Buildify's
+# stock `building` setup runs its Walls node with "remove from top" = 1, which
+# reserves the top level, so:
+#
+#     wall storeys placed = declared - 1        (declared >= 2)
+#
+# Measured on two stacked 4x4 footprints (8 wall modules per storey):
+#     declared  1  2  3  4  6
+#     walls     8  8 16 24 40   -> storeys 1 1 2 3 5
+#
+# Emptying the trim collection did NOT change this, so the reserved level is the
+# Walls node's own behaviour, not the trim occupying a tier. If anyone rewires
+# the node group's remove-from-top, re-measure and change this constant.
+TOP_LEVEL_RESERVED = 1
+
+# Declared value is capped at 100 by the /100 encoding, so real storeys cap one
+# lower.
+MAX_FLOORS = 100 - TOP_LEVEL_RESERVED
 
 # Buildify's own documented workaround for overlapping base-geometry edges,
 # which otherwise flip wall orientation with no error. Adjacent Build Mode
@@ -85,6 +104,16 @@ def _floors_for(b, floor_h):
     if floor_h <= 0.0:
         return 1
     return max(1, min(MAX_FLOORS, int(round(h / floor_h))))
+
+
+def _declared_levels(floors):
+    """Wall storeys wanted -> the level count Buildify must be told.
+
+    Buildify reserves the top level (see TOP_LEVEL_RESERVED), so asking for N
+    storeys means declaring N + 1. Kept as its own function so the calibration
+    can be tested without a scene.
+    """
+    return min(100, max(1, int(floors)) + TOP_LEVEL_RESERVED)
 
 
 def _group_key(b, floor_h):
@@ -207,15 +236,22 @@ class OP_ExportBuildifyFootprints(bpy.types.Operator):
         Utils.link_to_collection(ob, Config.TARGET_COLLECTION)
 
         vg = ob.vertex_groups.new(name=LEVELS_VGROUP)
+        declared_by_span = []
         for start, end, floors in spans:
-            vg.add(list(range(start, end)), floors / LEVELS_DIVISOR, 'REPLACE')
+            # +TOP_LEVEL_RESERVED so the storeys actually built match the block.
+            declared = _declared_levels(floors)
+            vg.add(list(range(start, end)), declared / LEVELS_DIVISOR, 'REPLACE')
+            declared_by_span.append((floors, declared))
 
         stretched = _non_module_edges(all_verts, all_faces)
         self.report(
             {'INFO'},
-            "Buildify footprint: %d building(s), %d verts, floors %s"
+            "Buildify footprint: %d building(s), %d verts, storeys %s "
+            "(declared %s, +%d reserved top level)"
             % (len(spans), len(all_verts),
-               ",".join(str(s[2]) for s in spans)))
+               ",".join(str(f) for f, _ in declared_by_span),
+               ",".join(str(d) for _, d in declared_by_span),
+               TOP_LEVEL_RESERVED))
         if stretched:
             self.report(
                 {'WARNING'},
