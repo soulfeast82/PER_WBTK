@@ -134,13 +134,58 @@ def _build_group(blocks, z):
             bm.faces.new([bm.verts.new((p[0], p[1], z)) for p in pts])
         except ValueError:
             pass  # duplicate face, harmless
+    # ORDER MATTERS — all four steps, in this sequence.
+    #
+    # 1. Subdivide FIRST. Abutting blocks of different widths make T-junctions:
+    #    an 8m block edge has no vertex where a neighbouring 4m block ends, so
+    #    the two faces share a point rather than an edge and never merge, and
+    #    you are left with overlapping collinear edges — Buildify's bug, again.
+    #    Cutting to module spans first puts a vertex at every module boundary so
+    #    the abutting edges actually line up.
+    _subdivide_to_module(bm)
+    # 2. Weld those now-aligned verts.
     if bm.verts:
         bmesh.ops.remove_doubles(bm, verts=bm.verts[:], dist=WELD_DIST)
+    # 3. Merge coplanar neighbours; this is what removes the shared edge.
+    #    use_verts=False — with True it also dissolves the collinear
+    #    module-boundary verts we just created, undoing step 1.
     if bm.faces:
-        # Dissolving interior faces removes the shared edges between abutting
-        # blocks, which is the real fix for Buildify's overlapping-edge bug.
-        bmesh.ops.dissolve_faces(bm, faces=bm.faces[:], use_verts=True)
+        bmesh.ops.dissolve_faces(bm, faces=bm.faces[:], use_verts=False)
+    # 4. Anything still shared by two faces.
+    interior = [e for e in bm.edges if len(e.link_faces) > 1]
+    if interior:
+        bmesh.ops.dissolve_edges(bm, edges=interior, use_verts=False)
     return bm
+
+
+def _subdivide_to_module(bm):
+    """Cut every outline edge down to module-width spans.
+
+    ⚠️ Buildify places ONE wall module per EDGE and stretches it to fit — it
+    does not tile modules along a long edge. Measured 2026-08-09: an 8 m edge
+    against a 4 m module produced a single wall at 1.75x width, not two walls.
+    The manual says the same thing ("if the stretching is very noticeable, I
+    suggest making an edge loop or subdividing the edge").
+
+    So a footprint being a multiple of the module width is necessary but NOT
+    sufficient — the edges have to actually be cut. Without this, long walls
+    ship with rivets and trim stretched well past what the 512 px/m texel
+    ruling allows.
+    """
+    if not bm.edges:
+        return
+    by_cuts = {}
+    for e in bm.edges:
+        L = (e.verts[1].co - e.verts[0].co).length
+        spans = int(round(L / BFY_MODULE_WIDTH))
+        if spans >= 2 and abs(L) > EDGE_TOL:
+            by_cuts.setdefault(spans - 1, []).append(e)
+    # group by cut count: subdivide_edges takes one `cuts` value per call.
+    # Note this can split a face (subdividing opposite edges of a quad adds a
+    # connecting edge) — that is fine here, because _build_group dissolves
+    # interior edges afterwards.
+    for cuts, edges in sorted(by_cuts.items(), reverse=True):
+        bmesh.ops.subdivide_edges(bm, edges=edges, cuts=cuts, use_grid_fill=False)
 
 
 def _shrink_to_centroid(bm, amount):
