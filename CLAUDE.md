@@ -500,6 +500,25 @@ repro.
   `operators_pipes.py`; unused `wbtk_barrel_rib_width` read in
   `operators_props.py`
 
+### FIXED - Buildify exporter destroyed the modifier on every re-export (2026-08-17)
+
+`OP_ExportBuildifyFootprints` called `bpy.data.objects.remove()` and rebuilt the footprint from
+scratch each run, so the hand-attached Buildify modifier - and its 7 configured inputs, plus
+custom properties and display settings - died on **every export**. `PER_DW_Buildify_Test.blend`
+had been committed with `modifiers: []` because of it.
+
+Now updates in place: same object, mesh rebuilt via `clear_geometry()` + `from_pydata()`.
+`Utils.link_to_collection` runs on CREATE only - it unlinks from every non-target collection
+(utils.py:112), so calling it on an existing footprint would move one the user had filed
+elsewhere. Guards added for a name taken by a non-mesh or library-linked object, and for a mesh
+shared with another object (that path swaps in a private mesh rather than clearing a shared
+one). A non-identity transform is warned about, never silently reset.
+
+**First real test suite in this addon:** `tests/test_buildify_export.py` - 33 assertions,
+headless, on a copy of the bench blend, **verified RED against the old code before the fix**.
+Not imported by `__init__.py`, so Blender never loads it. Full rationale and the measured
+Blender-5.1 facts are in `_gamedocs/BUILDIFY_INTEGRATION_v1.md`.
+
 ### ⚠️ UI OVERHAUL — Build Mode is buried (raised by Jermaine 2026-08-17)
 
 **Jermaine: "WBTK needs a UI overhaul, I am getting some serious fatigue. Build Mode should be the

@@ -266,24 +266,65 @@ class OP_ExportBuildifyFootprints(bpy.types.Operator):
             self.report({'WARNING'}, "Blocks produced no footprint geometry.")
             return {'CANCELLED'}
 
-        old = bpy.data.objects.get(FOOTPRINT_NAME)
-        if old:
-            me_old = old.data
-            bpy.data.objects.remove(old, do_unlink=True)
-            if me_old and me_old.users == 0:
-                bpy.data.meshes.remove(me_old)
+        # ⚠️ UPDATE IN PLACE. Never delete and recreate this object.
+        #
+        # The user attaches Buildify's `building` geometry-nodes modifier to it
+        # BY HAND and configures module width, module height and the floor
+        # range on that modifier. The old code called bpy.data.objects.remove()
+        # first, so every single re-export silently threw all of it away --
+        # measured 2026-08-17 against the bench file: 1 modifier + 7 hand-set
+        # input values + custom properties + display settings lost per run, and
+        # the bench file had been committed with modifiers already empty
+        # because of it. Rebuilding the mesh under the SAME object keeps the
+        # object, and everything hanging off it survives.
+        ob = bpy.data.objects.get(FOOTPRINT_NAME)
+        if ob is not None and (ob.type != 'MESH' or ob.library is not None):
+            self.report(
+                {'ERROR'},
+                "'%s' already exists as %s%s. Rename or remove it, then export "
+                "again." % (FOOTPRINT_NAME, ob.type.lower(),
+                            " linked from a library" if ob.library else " data"))
+            return {'CANCELLED'}
 
-        me = bpy.data.meshes.new(FOOTPRINT_NAME + "_Mesh")
-        me.from_pydata(all_verts, [], all_faces)
-        me.update()
+        if ob is None:
+            ob = bpy.data.objects.new(
+                FOOTPRINT_NAME, bpy.data.meshes.new(FOOTPRINT_NAME + "_Mesh"))
+            # ON CREATE ONLY. Utils.link_to_collection unlinks the object from
+            # every collection but the target (utils.py), so running it on an
+            # existing footprint would yank one the user had deliberately filed
+            # somewhere else.
+            Utils.link_to_collection(ob, Config.TARGET_COLLECTION)
+        elif ob.data.users > 1:
+            # Mesh shared with another object -- clearing it would wipe their
+            # geometry too. Give this one a private mesh instead; the OBJECT is
+            # still reused, so the modifier is still safe.
+            ob.data = bpy.data.meshes.new(FOOTPRINT_NAME + "_Mesh")
+        else:
+            ob.data.clear_geometry()
 
-        ob = bpy.data.objects.new(FOOTPRINT_NAME, me)
-        Utils.link_to_collection(ob, Config.TARGET_COLLECTION)
+        ob.data.from_pydata(all_verts, [], all_faces)
+        ob.data.update()
+        ob.update_tag()
 
-        vg = ob.vertex_groups.new(name=LEVELS_VGROUP)
+        # ⚠️ MEASURED 2026-08-17 on Blender 5.1: vertex groups live on the MESH
+        # datablock now, so clear_geometry() (and a data swap) wipes ALL of them.
+        # The .get() therefore always misses today and .new() always returns the
+        # clean name. Keep the get-or-new form anyway: if a future Blender ever
+        # preserves them, a bare .new() would hand back "building:levels.001",
+        # and Buildify resolves this group BY NAME -- the export would report
+        # success while driving nothing. Exactly the quiet failure this
+        # integration is prone to, and it would cost a session to find.
+        #
+        # Side effect of the same fact: any OTHER vertex group a user put on the
+        # footprint is lost on re-export. Not a regression (delete-and-recreate
+        # lost them too) and the object is a generated artifact, so left alone.
+        vg = (ob.vertex_groups.get(LEVELS_VGROUP)
+              or ob.vertex_groups.new(name=LEVELS_VGROUP))
         declared_by_span = []
         for start, end, floors in spans:
             # +TOP_LEVEL_RESERVED so the storeys actually built match the block.
+            # clear_geometry() dropped every old weight, so no stale assignment
+            # from a longer previous export can survive this.
             declared = _declared_levels(floors)
             vg.add(list(range(start, end)), declared / LEVELS_DIVISOR, 'REPLACE')
             declared_by_span.append((floors, declared))
@@ -302,6 +343,15 @@ class OP_ExportBuildifyFootprints(bpy.types.Operator):
                 {'WARNING'},
                 "%d outline run(s) are not multiples of %.1fm - Buildify will "
                 "stretch modules there." % (stretched, BFY_MODULE_WIDTH))
+        if not ob.matrix_world.is_identity:
+            # Deliberately NOT reset -- if the user moved it, that is a choice.
+            # But the verts are absolute Build Mode world coordinates, so the
+            # building will not land where the blocks are, and that mismatch is
+            # invisible until you go looking for it.
+            self.report(
+                {'WARNING'},
+                "'%s' has a non-identity transform - the Buildify result will "
+                "be offset from the Build Mode blocks." % FOOTPRINT_NAME)
         return {'FINISHED'}
 
 
