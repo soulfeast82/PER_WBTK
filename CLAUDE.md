@@ -539,6 +539,42 @@ output to **zero**. Every other assertion checks our data; that one checks Build
 ⚠️ Recorded in `_gamedocs/BUILDIFY_INTEGRATION_v1.md`: a **fresh** Buildify modifier ignores
 `building:levels` completely, because `- Randomize floor numbers -` defaults to True.
 
+### RESOLVED - the keymap crash was BoxCutter debris, and it is cleared (2026-08-17)
+
+Follow-up to the crash-log read below. The plan was "disable HOps and Boxcutter for one session"
+and neither addon was in the state that assumed:
+
+- **BoxCutter was already disabled** before anything was touched.
+- **HOps is listed in `preferences.addons` but was never loaded** - `addon_utils.disable` reports
+  `HOps not loaded`, no `hops.*` operator is registered, and it contributes **zero** dangling
+  keymap items. If you think you are using Hard Ops in this install, you are not.
+
+So the experiment could not have proved anything. Checking *why* found the real surface instead:
+**34 keymap items bound to operators that no longer exist**, 28 of them BoxCutter's, sitting in
+two `3D View Tool: ..., BoxCutter` keymaps that outlived the addon. That is exactly the
+`rna_KeyMap_item_remove` -> `BLI_findindex` shape in 12 of the 22 crash reports.
+
+**Fixed by removing the two orphaned BoxCutter keymaps** (one `keymaps.remove()` each rather than
+32 per-item removals, to minimise exposure to the very path that crashes). Dangling items
+**34 -> 6**. `use_preferences_save` is ON, so this persisted; reinstalling BoxCutter properly
+would recreate its keymaps.
+
+The remaining 6 are `mesh.loop_multi_select` inside RetopoFlow's Contours / PolyStrips / Strokes
+keymaps - RetopoFlow's own stale binding to a Blender operator that no longer exists in 5.1.
+**Deliberately left**: those keymaps each hold 15-18 LIVE `retopoflow.*` items, so deleting them
+wholesale would break a working addon.
+
+⚠️ **Method note, because three of my probes here returned wrong answers before one held up.**
+`hasattr(bpy.ops.<mod>, '<op>')` is **not** a valid existence test - `bpy.ops` resolves lazily and
+returns True for operators that do not exist. `get_rna_type()` also gives false negatives (it
+raises `AttributeError` on the perfectly real `wm.quit_blender`). The discriminator that survived
+cross-checking is:
+
+    fn in dir(getattr(bpy.ops, mod))
+
+validated against `mesh.primitive_cube_add` (True), `wm.quit_blender` (True), `bc.shape_draw`
+(False), `bogus.nonexistent` (False). **Sanity-check the checker before trusting a count.**
+
 ### Blender crash logs, read properly (2026-08-17) - and a default reverted
 
 I had twice blamed the `clean_mesh` addon for the repeated Blender crashes and recommended
