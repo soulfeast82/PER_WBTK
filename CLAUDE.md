@@ -519,6 +519,26 @@ headless, on a copy of the bench blend, **verified RED against the old code befo
 Not imported by `__init__.py`, so Blender never loads it. Full rationale and the measured
 Blender-5.1 facts are in `_gamedocs/BUILDIFY_INTEGRATION_v1.md`.
 
+### Follow-up: two defects in the exporter fix, caught by adversarial review (2026-08-17)
+
+A ten-agent review workflow ran against `25a64d4`; three independent reviewers converged on the
+same two defects, both reproduced headlessly first.
+
+- **`ID.users` counts the fake user**, so `ob.data.users > 1` misread a shielded-but-unshared
+  mesh as shared and forked it - dropping the `use_fake_user` the user had explicitly set,
+  because `.copy()` does not carry it. Now guarded by `_is_shared()`.
+- **A regression I introduced in 25a64d4**: reusing the object means the footprint can sit
+  outside the active scene, where the export rebuilds it, reports FINISHED, and nothing appears.
+  Warns rather than relinking - relinking would re-arm the collection-yank bug the fix exists
+  to avoid.
+
+Suite is now **40 assertions** and gains an end-to-end section: with the modifier configured as
+live, 1/2/4/6 storeys give 32/49/85/122 Buildify instances, and renaming the vertex group drops
+output to **zero**. Every other assertion checks our data; that one checks Buildify reads it.
+
+⚠️ Recorded in `_gamedocs/BUILDIFY_INTEGRATION_v1.md`: a **fresh** Buildify modifier ignores
+`building:levels` completely, because `- Randomize floor numbers -` defaults to True.
+
 ### ⚠️ UI OVERHAUL — Build Mode is buried (raised by Jermaine 2026-08-17)
 
 **Jermaine: "WBTK needs a UI overhaul, I am getting some serious fatigue. Build Mode should be the

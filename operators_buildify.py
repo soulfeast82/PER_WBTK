@@ -228,6 +228,21 @@ def _non_module_edges(verts, faces):
     return bad
 
 
+def _is_shared(me):
+    """Is this mesh really used by more than one object?
+
+    ⚠️ ID.users COUNTS THE FAKE USER (measured 2026-08-17, Blender 5.1). A bare
+    `me.users > 1` therefore reads a shielded-but-unshared mesh as shared, and
+    the shared-mesh path would fork it: the name drifts to "..._Mesh.001", the
+    original is orphaned but pinned forever by its own shield, and -- the sharp
+    end -- the new datablock does NOT inherit use_fake_user, so the protection
+    the user explicitly asked for is silently removed.
+    """
+    if me is None:
+        return False
+    return (me.users - (1 if me.use_fake_user else 0)) > 1
+
+
 class OP_ExportBuildifyFootprints(bpy.types.Operator):
     """Export Build Mode block footprints as flat base geometry for Buildify"""
     bl_idname = "wbtk.export_buildify_footprints"
@@ -294,7 +309,7 @@ class OP_ExportBuildifyFootprints(bpy.types.Operator):
             # existing footprint would yank one the user had deliberately filed
             # somewhere else.
             Utils.link_to_collection(ob, Config.TARGET_COLLECTION)
-        elif ob.data.users > 1:
+        elif _is_shared(ob.data):
             # Mesh shared with another object -- clearing it would wipe their
             # geometry too. Give this one a private mesh instead; the OBJECT is
             # still reused, so the modifier is still safe.
@@ -343,6 +358,19 @@ class OP_ExportBuildifyFootprints(bpy.types.Operator):
                 {'WARNING'},
                 "%d outline run(s) are not multiples of %.1fm - Buildify will "
                 "stretch modules there." % (stretched, BFY_MODULE_WIDTH))
+        if ob.name not in context.scene.objects:
+            # Regression guard. The old delete-and-recreate always re-linked the
+            # object into the target collection, so it could not end up outside
+            # the scene. Reusing the object can -- if it lives only in another
+            # scene, or in a collection linked to no scene, the export rebuilds
+            # it perfectly and reports FINISHED while nothing appears here.
+            # Deliberately NOT auto-relinked: Utils.link_to_collection unlinks
+            # from every non-target collection, which would yank a footprint the
+            # user deliberately filed elsewhere. Warn instead.
+            self.report(
+                {'WARNING'},
+                "'%s' is not in the active scene - the export succeeded but "
+                "nothing will appear here." % FOOTPRINT_NAME)
         if not ob.matrix_world.is_identity:
             # Deliberately NOT reset -- if the user moved it, that is a choice.
             # But the verts are absolute Build Mode world coordinates, so the

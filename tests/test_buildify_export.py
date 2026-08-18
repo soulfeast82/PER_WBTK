@@ -261,6 +261,133 @@ check("other groups dropped (5.1 mesh-datablock behaviour, not a regression)",
 check("and still no %s.001" % LEVELS_VGROUP,
       LEVELS_VGROUP + ".001" not in gs, str(gs))
 
+print("\n-- G. a shielded (fake-user) mesh must not be forked --")
+# ID.users COUNTS THE FAKE USER, so a naive `users > 1` reads a shielded but
+# unshared mesh as shared and takes the swap path: name drifts to .001, the
+# original is orphaned yet pinned forever by its own shield, and .copy() does
+# not carry use_fake_user -- so the protection is silently removed.
+wipe_footprint()
+blocks(((0.0, 0.0, 0.0), 8.0, 4.0, 3.5))
+bpy.ops.wbtk.export_buildify_footprints()
+fp = bpy.data.objects[FOOTPRINT_NAME]
+fp.data.use_fake_user = True
+name_before, n_meshes = fp.data.name, len(bpy.data.meshes)
+blocks(((0.0, 0.0, 0.0), 4.0, 4.0, 3.5))
+bpy.ops.wbtk.export_buildify_footprints()
+check("shielded mesh not forked to .001",
+      bpy.data.objects[FOOTPRINT_NAME].data.name == name_before,
+      "%s -> %s" % (name_before, bpy.data.objects[FOOTPRINT_NAME].data.name))
+check("the user's shield survives",
+      bpy.data.objects[FOOTPRINT_NAME].data.use_fake_user)
+check("footprint still rebuilt correctly",
+      len(bpy.data.objects[FOOTPRINT_NAME].data.vertices) == 4,
+      "%d verts" % len(bpy.data.objects[FOOTPRINT_NAME].data.vertices))
+
+print("\n-- H. footprint outside the active scene must not fail silently --")
+# Reusing the object (instead of recreating it) means it can live somewhere the
+# active scene cannot see. The export then rebuilds it perfectly and reports
+# FINISHED while nothing appears. Not auto-relinked -- link_to_collection would
+# yank a footprint the user filed elsewhere -- so it must WARN.
+wipe_footprint()
+blocks(((0.0, 0.0, 0.0), 8.0, 4.0, 3.5))
+bpy.ops.wbtk.export_buildify_footprints()
+fp = bpy.data.objects[FOOTPRINT_NAME]
+for c in list(fp.users_collection):
+    c.objects.unlink(fp)
+bpy.data.scenes.new("Other").collection.objects.link(fp)
+import PER_WBTK.operators_buildify as _bfy                       # noqa: E402
+
+# Call execute() UNBOUND with a duck-typed self. It is a plain Python function
+# and self.report is the only thing it uses self for, so this captures every
+# report without touching bpy.types.Operator.report -- monkeypatching that RNA
+# method hard-crashes Blender.
+_warned = []
+
+
+class _ReportProbe(object):
+    def report(self, kind, msg):
+        _warned.append((set(kind), msg))
+
+
+blocks(((0.0, 0.0, 0.0), 4.0, 4.0, 3.5))
+res = _bfy.OP_ExportBuildifyFootprints.execute(_ReportProbe(), bpy.context)
+check("still rebuilds the geometry",
+      res == {'FINISHED'}
+      and len(bpy.data.objects[FOOTPRINT_NAME].data.vertices) == 4,
+      str(res))
+check("but WARNS that nothing will appear in this scene",
+      any("not in the active scene" in m for k, m in _warned if 'WARNING' in k),
+      str([m[:50] for k, m in _warned]))
+
+# =============================================================================
+print("\n=== 3. END TO END: does the levels weight actually drive Buildify? ===")
+# =============================================================================
+# Every other assertion here checks OUR data. This one checks that Buildify
+# reads it -- the only assertion that would catch the group being renamed,
+# the weights being wrong, or the modifier being wired to nothing.
+# Section 2 ran read_factory_settings, so reload the bench to get the REAL
+# Buildify node library back.
+ng = None
+if os.path.exists(BENCH):
+    tmp2 = os.path.join(tempfile.mkdtemp(prefix="wbtk_bfy_e2e_"), "bench.blend")
+    shutil.copy2(BENCH, tmp2)
+    bpy.ops.wm.open_mainfile(filepath=tmp2)
+    ng = bpy.data.node_groups.get("building")
+if ng is None:
+    print("  SKIPPED - the real 'building' node group is not available")
+else:
+    def instance_count(ob):
+        # NO fallback to vertex count -- zero instances is a MEANINGFUL result
+        # here (it is what a broken vertex-group name produces), and a fallback
+        # would mask exactly the failure this section exists to catch.
+        deps = bpy.context.evaluated_depsgraph_get()
+        deps.update()
+        return sum(1 for i in deps.object_instances
+                   if i.is_instance and i.parent
+                   and i.parent.original == ob.original)
+
+    wipe_footprint()
+    blocks(((0.0, 0.0, 0.0), 8.0, 8.0, 3.5))
+    bpy.ops.wbtk.export_buildify_footprints()
+    fp = bpy.data.objects[FOOTPRINT_NAME]
+    if not fp.modifiers:
+        fp.modifiers.new("Buildify", 'NODES').node_group = ng
+    m = fp.modifiers[0]
+    # ⚠️ A FRESH modifier does NOT read the vertex group. Measured 2026-08-17:
+    # "- Randomize floor numbers -" defaults to True, so floors come from the
+    # Min/Max ints at random and building:levels is ignored entirely. Module
+    # size also defaults to 3.0 x 3.0, not the Scale Bible's 4.0 x 3.5. Match
+    # the live configuration or this whole section measures nothing.
+    m["Input_5"] = True       # - BLOSM or ADE -            (generating mode)
+    m["Input_8"] = False      # - Randomize floor numbers - OFF
+    m["Input_3"] = 4.0        # Module width
+    m["Input_9"] = 3.5        # Module height
+
+    counts = []
+    for h in (3.5, 7.0, 14.0, 21.0):
+        blocks(((0.0, 0.0, 0.0), 8.0, 8.0, h))
+        bpy.ops.wbtk.export_buildify_footprints()
+        fp = bpy.data.objects[FOOTPRINT_NAME]
+        bpy.context.view_layer.update()
+        counts.append((int(round(h / 3.5)), instance_count(fp)))
+    print("  storeys -> Buildify instances: %s"
+          % ", ".join("%d->%d" % c for c in counts))
+    check("the levels weight actually drives Buildify output",
+          all(a[1] < b[1] for a, b in zip(counts, counts[1:])), str(counts))
+    check("a 1-storey block produces real geometry", counts[0][1] > 0,
+          str(counts[0]))
+
+    # The sharpest proof that the group NAME is load-bearing: break the name
+    # and Buildify emits nothing, while the exporter would still report success.
+    top = counts[-1][1]
+    fp.vertex_groups[LEVELS_VGROUP].name = LEVELS_VGROUP + "_BROKEN"
+    bpy.context.view_layer.update()
+    broken = instance_count(fp)
+    print("  after renaming the vertex group: %d (was %d)" % (broken, top))
+    check("a wrong group name silently produces ZERO geometry "
+          "(this is why the .001 guard exists)", broken == 0,
+          "%d instances" % broken)
+
 print("\n%s (%d failing)" % ("RESULT: GREEN" if not _fails else "RESULT: RED",
                              len(_fails)))
 for f in _fails:
