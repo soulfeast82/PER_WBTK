@@ -812,6 +812,11 @@ class PropertyManager:
             name="Live Preview Active", default=False)),
         ('wbtk_live_preview_type', bpy.props.StringProperty(
             name="Live Preview Type", default='')),
+        # Set when the user turns a BUILD_MODE preview off BY HAND, so entering
+        # Build Mode again respects that instead of switching it back on. Live
+        # preview is otherwise ON by default in Build Mode (see bm_operators).
+        ('wbtk_bm_preview_optout', bpy.props.BoolProperty(
+            name="Build Mode Preview Opt-Out", default=False)),
 
         # === Vent / Grate Generator ===
         ('wbtk_vent_width', bpy.props.FloatProperty(

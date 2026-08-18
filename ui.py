@@ -69,6 +69,7 @@ class WBTK_PT_GlobalSettings(WBTK_PanelBase):
 class WBTK_PT_Walkways(WBTK_PanelBase):
     bl_label = "Walkways & Railings"
     bl_idname = "WBTK_PT_Walkways"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def _draw_op_box(self, context, label, op_idname, properties):
         scene = context.scene
@@ -105,10 +106,181 @@ class WBTK_PT_Walkways(WBTK_PanelBase):
             ("wbtk_ds_rail", "Rails")
         ])
 
+# --- Build Mode Panel -------------------------------------------------------
+# PRIMARY authoring workflow (Strategic Pivot item #1), so it is registered
+# FIRST and opens expanded.
+#
+# Lifted out of WBTK_PT_Structures on 2026-08-17. It had been a *section*
+# starting 156 lines into a 437-line panel, below the Wall / Room / Building
+# Shell / Building Row generators -- i.e. the primary path was hidden inside
+# the parametric paths Buildify superseded. Jermaine flagged the resulting
+# fatigue; see CLAUDE.md "UI OVERHAUL".
+#
+# The body below is a VERBATIM move. Not one line was edited in the lift, so a
+# diff -w against the old Structures panel is the correctness proof.
+class WBTK_PT_BuildMode(WBTK_PanelBase):
+    bl_label = "Build Mode"
+    bl_idname = "WBTK_PT_BuildMode"
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+
+        # --- Build Mode ---
+        from .bm_data import get_selected, get_all, get_data
+
+        is_building = getattr(scene, 'wbtk_bm_active', False)
+        n_blocks = len(get_all())
+        sel = get_selected(context)
+
+        box_bm = layout.box()
+
+        # Mode indicator
+        if is_building:
+            header = box_bm.row()
+            header.alert = True
+            header.label(text="BUILD MODE", icon='LIGHT')
+            header.operator("wbtk.bm_toggle_mode", text="Exit", icon='PANEL_CLOSE')
+        else:
+            row_enter = box_bm.row()
+            row_enter.scale_y = 1.6
+            row_enter.operator("wbtk.bm_toggle_mode", text="Enter Build Mode", icon='MOD_BUILD')
+            if n_blocks > 0:
+                box_bm.label(text=f"{n_blocks} block(s) placed", icon='INFO')
+                row_gen_only = box_bm.row()
+                row_gen_only.operator("wbtk.bm_generate", text="Generate", icon='MESH_CUBE')
+                row_gen_only.operator("wbtk.bm_clear_all", text="", icon='X')
+
+        if not is_building:
+            pass  # Skip rest of panel when not in build mode
+        else:
+            col_bm = box_bm.column(align=True)
+
+            # --- Placement ---
+            row_add = col_bm.row(align=True)
+            row_add.scale_y = 1.3
+            row_add.operator("wbtk.bm_add_block", text="Add [A]", icon='ADD')
+            row_add.operator("wbtk.bm_stack_block", text="Stack [S]", icon='TRIA_UP')
+
+            row_attach = col_bm.row(align=True)
+            row_attach.prop(scene, "wbtk_bm_attach_dir", expand=True)
+            op_attach = col_bm.operator("wbtk.bm_attach_block", text="Attach", icon='LINKED')
+            op_attach.direction = getattr(scene, 'wbtk_bm_attach_dir', 'EAST')
+
+            col_bm.separator()
+
+            # --- Grid ---
+            row_grid = col_bm.row(align=True)
+            row_grid.prop(scene, "wbtk_bm_grid_size", text="Grid")
+            row_grid.prop(scene, "wbtk_bm_block_color", text="")
+
+            col_bm.separator()
+
+            # --- Selected Block ---
+            if sel:
+                block_box = col_bm.box()
+                block_box.label(text=f"{sel.name}", icon='OBJECT_DATA')
+
+                row_dim = block_box.row(align=True)
+                row_dim.prop(scene, "wbtk_bm_width", text="W")
+                row_dim.prop(scene, "wbtk_bm_depth", text="D")
+                row_dim.prop(scene, "wbtk_bm_height", text="H")
+
+                block_box.label(text="Walls:")
+                row_ns = block_box.row(align=True)
+                row_ns.prop(scene, "wbtk_bm_wall_north", text="N")
+                row_ns.prop(scene, "wbtk_bm_wall_south", text="S")
+                row_ew = block_box.row(align=True)
+                row_ew.prop(scene, "wbtk_bm_wall_east", text="E")
+                row_ew.prop(scene, "wbtk_bm_wall_west", text="W")
+
+                block_box.prop(scene, "wbtk_bm_chamfer_size", text="Chamfer")
+                block_data = get_data(sel)
+                chamfers = block_data.get("chamfers", [])
+                row_ch = block_box.row(align=True)
+                for corner in ['NW', 'NE', 'SW', 'SE']:
+                    is_on = corner.lower() in chamfers
+                    op = row_ch.operator("wbtk.bm_toggle_chamfer", text=corner,
+                        depress=is_on, icon='MESH_CIRCLE' if is_on else 'HANDLETYPE_FREE_VEC')
+                    op.corner = corner
+
+                row_ba = block_box.row(align=True)
+                row_ba.operator("wbtk.bm_duplicate_block", text="Dupe [D]", icon='DUPLICATE')
+                row_ba.operator("wbtk.bm_sync_from_block", text="Reload", icon='FILE_REFRESH')
+                row_ba.operator("wbtk.bm_delete_block", text="", icon='TRASH')
+            else:
+                col_bm.label(text="Click a block to edit", icon='RESTRICT_SELECT_OFF')
+
+            col_bm.separator()
+
+            # --- Settings ---
+            col_bm.prop(scene, "wbtk_bm_auto_setback", text="Stack Setback")
+
+            col_bm.separator()
+
+            # --- Actions ---
+            row_gen = col_bm.row(align=True)
+            row_gen.scale_y = 1.4
+            row_gen.operator("wbtk.bm_generate", text="Generate [G]", icon='MESH_CUBE')
+            row_gen.operator("wbtk.bm_clear_all", text="", icon='X')
+
+            row_tools = col_bm.row(align=True)
+            row_tools.operator("wbtk.bm_iso_view", text="Iso [I]", icon='VIEW_ORTHO')
+            row_tools.operator("wbtk.bm_mirror_x", text="MirX", icon='MOD_MIRROR')
+            row_tools.operator("wbtk.bm_mirror_y", text="MirY", icon='MOD_MIRROR')
+
+            col_bm.label(text=f"{n_blocks} block(s)", icon='INFO')
+            _draw_live_preview_toggle(box_bm, scene, 'BUILD_MODE')
+
+            # --- Details ---
+            detail_box = box_bm.box()
+            detail_box.label(text="Detail Stamps", icon='OVERLAY')
+            detail_col = detail_box.column(align=True)
+            row_face = detail_col.row(align=True)
+            row_face.prop(scene, "wbtk_bm_detail_face", text="")
+            row_face.prop(scene, "wbtk_bm_detail_scale", text="Scale")
+            row_pos = detail_col.row(align=True)
+            row_pos.prop(scene, "wbtk_bm_detail_offset_x", text="X Pos")
+            row_pos.prop(scene, "wbtk_bm_detail_offset_z", text="Z Pos")
+            detail_col.separator()
+            from .bm_details import DETAIL_TYPES
+            row_d = None
+            for i, (key, info) in enumerate(DETAIL_TYPES.items()):
+                if i % 2 == 0:
+                    row_d = detail_col.row(align=True)
+                op = row_d.operator("wbtk.bm_add_detail", text=info['label'], icon=info['icon'])
+                op.detail_type = key
+            detail_col.separator()
+            detail_col.operator("wbtk.bm_clear_details", text="Clear Details", icon='X')
+
+            # --- Shortcuts ---
+            sk = box_bm.box()
+            sk.scale_y = 0.7
+            sk.label(text="Shortcuts:", icon='EVENT_SPACEKEY')
+            sk.label(text="A=add  S=stack  D=dupe  X=delete")
+            sk.label(text="G=generate  I=iso  RClick=menu")
+
+        # --- Buildify bridge (Strategic Pivot item #1) ---
+        box_bm.separator(factor=1.0)
+        row_bfy = box_bm.row()
+        row_bfy.operator("wbtk.export_buildify_footprints",
+                         text="Export Footprints for Buildify", icon='EXPORT')
+
+        # --- Cleanup (destructive, always visible in the Build Mode section) ---
+        box_bm.separator(factor=2.0)
+        row_cleanup = box_bm.row()
+        row_cleanup.alert = True
+        row_cleanup.operator("wbtk.bm_cleanup_helpers",
+                             text="Cleanup All Helpers", icon='TRASH')
+
+
+
 # --- Structures Panel (Integrated from building_toolkit) ---
 class WBTK_PT_Structures(WBTK_PanelBase):
     bl_label = "Structures"
     bl_idname = "WBTK_PT_Structures"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -262,153 +434,6 @@ class WBTK_PT_Structures(WBTK_PanelBase):
         row_batch.scale_y = 1.4
         row_batch.operator("wbtk.generate_building_row", text="Generate Building Row", icon='ADD')
 
-        # --- Build Mode ---
-        from .bm_data import get_selected, get_all, get_data
-
-        is_building = getattr(scene, 'wbtk_bm_active', False)
-        n_blocks = len(get_all())
-        sel = get_selected(context)
-
-        box_bm = layout.box()
-
-        # Mode indicator
-        if is_building:
-            header = box_bm.row()
-            header.alert = True
-            header.label(text="BUILD MODE", icon='LIGHT')
-            header.operator("wbtk.bm_toggle_mode", text="Exit", icon='PANEL_CLOSE')
-        else:
-            row_enter = box_bm.row()
-            row_enter.scale_y = 1.6
-            row_enter.operator("wbtk.bm_toggle_mode", text="Enter Build Mode", icon='MOD_BUILD')
-            if n_blocks > 0:
-                box_bm.label(text=f"{n_blocks} block(s) placed", icon='INFO')
-                row_gen_only = box_bm.row()
-                row_gen_only.operator("wbtk.bm_generate", text="Generate", icon='MESH_CUBE')
-                row_gen_only.operator("wbtk.bm_clear_all", text="", icon='X')
-
-        if not is_building:
-            pass  # Skip rest of panel when not in build mode
-        else:
-            col_bm = box_bm.column(align=True)
-
-            # --- Placement ---
-            row_add = col_bm.row(align=True)
-            row_add.scale_y = 1.3
-            row_add.operator("wbtk.bm_add_block", text="Add [A]", icon='ADD')
-            row_add.operator("wbtk.bm_stack_block", text="Stack [S]", icon='TRIA_UP')
-
-            row_attach = col_bm.row(align=True)
-            row_attach.prop(scene, "wbtk_bm_attach_dir", expand=True)
-            op_attach = col_bm.operator("wbtk.bm_attach_block", text="Attach", icon='LINKED')
-            op_attach.direction = getattr(scene, 'wbtk_bm_attach_dir', 'EAST')
-
-            col_bm.separator()
-
-            # --- Grid ---
-            row_grid = col_bm.row(align=True)
-            row_grid.prop(scene, "wbtk_bm_grid_size", text="Grid")
-            row_grid.prop(scene, "wbtk_bm_block_color", text="")
-
-            col_bm.separator()
-
-            # --- Selected Block ---
-            if sel:
-                block_box = col_bm.box()
-                block_box.label(text=f"{sel.name}", icon='OBJECT_DATA')
-
-                row_dim = block_box.row(align=True)
-                row_dim.prop(scene, "wbtk_bm_width", text="W")
-                row_dim.prop(scene, "wbtk_bm_depth", text="D")
-                row_dim.prop(scene, "wbtk_bm_height", text="H")
-
-                block_box.label(text="Walls:")
-                row_ns = block_box.row(align=True)
-                row_ns.prop(scene, "wbtk_bm_wall_north", text="N")
-                row_ns.prop(scene, "wbtk_bm_wall_south", text="S")
-                row_ew = block_box.row(align=True)
-                row_ew.prop(scene, "wbtk_bm_wall_east", text="E")
-                row_ew.prop(scene, "wbtk_bm_wall_west", text="W")
-
-                block_box.prop(scene, "wbtk_bm_chamfer_size", text="Chamfer")
-                block_data = get_data(sel)
-                chamfers = block_data.get("chamfers", [])
-                row_ch = block_box.row(align=True)
-                for corner in ['NW', 'NE', 'SW', 'SE']:
-                    is_on = corner.lower() in chamfers
-                    op = row_ch.operator("wbtk.bm_toggle_chamfer", text=corner,
-                        depress=is_on, icon='MESH_CIRCLE' if is_on else 'HANDLETYPE_FREE_VEC')
-                    op.corner = corner
-
-                row_ba = block_box.row(align=True)
-                row_ba.operator("wbtk.bm_duplicate_block", text="Dupe [D]", icon='DUPLICATE')
-                row_ba.operator("wbtk.bm_sync_from_block", text="Reload", icon='FILE_REFRESH')
-                row_ba.operator("wbtk.bm_delete_block", text="", icon='TRASH')
-            else:
-                col_bm.label(text="Click a block to edit", icon='RESTRICT_SELECT_OFF')
-
-            col_bm.separator()
-
-            # --- Settings ---
-            col_bm.prop(scene, "wbtk_bm_auto_setback", text="Stack Setback")
-
-            col_bm.separator()
-
-            # --- Actions ---
-            row_gen = col_bm.row(align=True)
-            row_gen.scale_y = 1.4
-            row_gen.operator("wbtk.bm_generate", text="Generate [G]", icon='MESH_CUBE')
-            row_gen.operator("wbtk.bm_clear_all", text="", icon='X')
-
-            row_tools = col_bm.row(align=True)
-            row_tools.operator("wbtk.bm_iso_view", text="Iso [I]", icon='VIEW_ORTHO')
-            row_tools.operator("wbtk.bm_mirror_x", text="MirX", icon='MOD_MIRROR')
-            row_tools.operator("wbtk.bm_mirror_y", text="MirY", icon='MOD_MIRROR')
-
-            col_bm.label(text=f"{n_blocks} block(s)", icon='INFO')
-            _draw_live_preview_toggle(box_bm, scene, 'BUILD_MODE')
-
-            # --- Details ---
-            detail_box = box_bm.box()
-            detail_box.label(text="Detail Stamps", icon='OVERLAY')
-            detail_col = detail_box.column(align=True)
-            row_face = detail_col.row(align=True)
-            row_face.prop(scene, "wbtk_bm_detail_face", text="")
-            row_face.prop(scene, "wbtk_bm_detail_scale", text="Scale")
-            row_pos = detail_col.row(align=True)
-            row_pos.prop(scene, "wbtk_bm_detail_offset_x", text="X Pos")
-            row_pos.prop(scene, "wbtk_bm_detail_offset_z", text="Z Pos")
-            detail_col.separator()
-            from .bm_details import DETAIL_TYPES
-            row_d = None
-            for i, (key, info) in enumerate(DETAIL_TYPES.items()):
-                if i % 2 == 0:
-                    row_d = detail_col.row(align=True)
-                op = row_d.operator("wbtk.bm_add_detail", text=info['label'], icon=info['icon'])
-                op.detail_type = key
-            detail_col.separator()
-            detail_col.operator("wbtk.bm_clear_details", text="Clear Details", icon='X')
-
-            # --- Shortcuts ---
-            sk = box_bm.box()
-            sk.scale_y = 0.7
-            sk.label(text="Shortcuts:", icon='EVENT_SPACEKEY')
-            sk.label(text="A=add  S=stack  D=dupe  X=delete")
-            sk.label(text="G=generate  I=iso  RClick=menu")
-
-        # --- Buildify bridge (Strategic Pivot item #1) ---
-        box_bm.separator(factor=1.0)
-        row_bfy = box_bm.row()
-        row_bfy.operator("wbtk.export_buildify_footprints",
-                         text="Export Footprints for Buildify", icon='EXPORT')
-
-        # --- Cleanup (destructive, always visible in the Build Mode section) ---
-        box_bm.separator(factor=2.0)
-        row_cleanup = box_bm.row()
-        row_cleanup.alert = True
-        row_cleanup.operator("wbtk.bm_cleanup_helpers",
-                             text="Cleanup All Helpers", icon='TRASH')
-
         # --- Block Composer (Phase 2) ---
         box_block = layout.box()
         box_block.label(text="Block Composer", icon='GROUP')
@@ -546,6 +571,7 @@ class WBTK_PT_Structures(WBTK_PanelBase):
 class WBTK_PT_Props(WBTK_PanelBase):
     bl_label = "Props"
     bl_idname = "WBTK_PT_Props"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -614,6 +640,7 @@ class WBTK_PT_Props(WBTK_PanelBase):
 class WBTK_PT_Ground(WBTK_PanelBase):
     bl_label = "Ground & Surfaces"
     bl_idname = "WBTK_PT_Ground"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -633,6 +660,7 @@ class WBTK_PT_Ground(WBTK_PanelBase):
 class WBTK_PT_Fences(WBTK_PanelBase):
     bl_label = "Fences"
     bl_idname = "WBTK_PT_Fences"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -668,6 +696,7 @@ class WBTK_PT_Fences(WBTK_PanelBase):
 class WBTK_PT_Utilities(WBTK_PanelBase):
     bl_label = "Utilities"
     bl_idname = "WBTK_PT_Utilities"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -681,6 +710,7 @@ class WBTK_PT_Utilities(WBTK_PanelBase):
 class WBTK_PT_Foliage(WBTK_PanelBase):
     bl_label = "Foliage Generator"
     bl_idname = "WBTK_PT_Foliage"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -776,6 +806,7 @@ class WBTK_PT_Foliage(WBTK_PanelBase):
 class WBTK_PT_UEPipeline(WBTK_PanelBase):
     bl_label = "Unreal Engine Pipeline"
     bl_idname = "WBTK_PT_UEPipeline"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -1027,6 +1058,7 @@ class WBTK_PT_Scatter(WBTK_PanelBase):
 class WBTK_PT_FaceMagnet(WBTK_PanelBase):
     bl_label = "Face Magnet"
     bl_idname = "WBTK_PT_FaceMagnet"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -1054,6 +1086,9 @@ class WBTK_PT_FaceMagnet(WBTK_PanelBase):
 
 # Ensure this list includes all panels defined above
 _classes_to_register = (
+    # Build Mode first: it is the primary workflow, and panel order in a
+    # category follows registration order when bl_order is unset (all are).
+    WBTK_PT_BuildMode,
     WBTK_PT_GlobalSettings,
     WBTK_PT_Walkways,
     WBTK_PT_Structures,

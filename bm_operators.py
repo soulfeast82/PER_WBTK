@@ -13,6 +13,26 @@ from . import bm_data
 #  ENTER / EXIT
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _set_live_preview(context, on):
+    """Drive the BUILD_MODE live preview without fighting the toggle operator.
+
+    wbtk.live_preview_toggle is a TOGGLE, so calling it blind would switch a
+    preview that is already correct back OFF. Check the state first.
+    """
+    scene = context.scene
+    is_on = (getattr(scene, 'wbtk_live_preview_active', False)
+             and getattr(scene, 'wbtk_live_preview_type', '') == 'BUILD_MODE')
+    if is_on == bool(on):
+        return
+    try:
+        if on:
+            bpy.ops.wbtk.live_preview_toggle(generator_type='BUILD_MODE')
+        else:
+            bpy.ops.wbtk.live_preview_off()
+    except Exception:
+        pass  # never block entering/leaving Build Mode over the preview
+
+
 class OP_ToggleMode(bpy.types.Operator):
     """Enter or exit Build Mode"""
     bl_idname = "wbtk.bm_toggle_mode"
@@ -26,6 +46,7 @@ class OP_ToggleMode(bpy.types.Operator):
         if active:
             scene.wbtk_bm_active = False
             bm_data.destroy_grid()
+            _set_live_preview(context, False)
             self.report({'INFO'}, "Build Mode OFF")
         else:
             scene.wbtk_bm_active = True
@@ -36,6 +57,11 @@ class OP_ToggleMode(bpy.types.Operator):
                 context.space_data.shading.color_type = 'OBJECT'
             except Exception:
                 pass
+            # Live preview ON by default -- Build Mode is the primary workflow
+            # and used to start with its preview off every single time. Honours
+            # a manual opt-out (see properties.wbtk_bm_preview_optout).
+            if not getattr(scene, 'wbtk_bm_preview_optout', False):
+                _set_live_preview(context, True)
             # Start shortcut listener
             context.window_manager.modal_handler_add(self)
             self.report({'INFO'}, "Build Mode ON — A=add S=stack D=dupe X=del G=gen")

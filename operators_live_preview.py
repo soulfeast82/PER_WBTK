@@ -214,6 +214,9 @@ class WBTK_OT_LivePreviewToggle(bpy.types.Operator):
             _live_state['last_hash'] = ''
             context.scene.wbtk_live_preview_active = False
             context.scene.wbtk_live_preview_type = ''
+            if gen_type == 'BUILD_MODE':
+                # Turned off by hand -> stay off next time Build Mode opens.
+                context.scene.wbtk_bm_preview_optout = True
             self.report({'INFO'}, f"Live preview OFF")
         else:
             # Turn ON (or switch type)
@@ -226,6 +229,8 @@ class WBTK_OT_LivePreviewToggle(bpy.types.Operator):
             _live_state['last_hash'] = ''  # Force immediate rebuild
             context.scene.wbtk_live_preview_active = True
             context.scene.wbtk_live_preview_type = gen_type
+            if gen_type == 'BUILD_MODE':
+                context.scene.wbtk_bm_preview_optout = False
 
             # Immediate first build
             _rebuild_live_preview()

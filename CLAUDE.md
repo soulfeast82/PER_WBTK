@@ -521,7 +521,37 @@ and the complaint understates it:
 So the tool's shape still reflects the pre-pivot world: the superseded paths are the loudest thing
 on screen and the primary one is hidden inside them.
 
-**Proposed scope (bounded, in order of payoff):**
+**SHIPPED 2026-08-17 (headless-verified, awaiting viewport smoke test):**
+
+1. ✅ **`WBTK_PT_BuildMode` is its own top-level panel, registered first.** The 147-line
+   section was lifted out of `WBTK_PT_Structures` **verbatim** — byte-identical body, not one
+   line edited — so a diff against `ui.py.bak_uipass` is the correctness proof. Structures
+   drops 437 → 292 lines and keeps Wall / Room / Shell / Row / Block Composer / Enhancements /
+   Support Tower unchanged.
+2. ✅ **Live preview is ON by default in Build Mode.** Entering Build Mode enables the
+   `BUILD_MODE` preview; exiting disables it (it previously leaked — only Cleanup tore it down).
+   Implemented in `bm_operators._set_live_preview`, a state-checking wrapper, because
+   `wbtk.live_preview_toggle` is a *toggle* and calling it blind would switch a correct preview
+   back off. Both directions are idempotent, and the helper swallows exceptions so a preview
+   failure can never block entering or leaving Build Mode.
+   - **Opt-out honoured:** turning the Build Mode preview off *by hand* sets
+     `wbtk_bm_preview_optout` (new, `properties.py`), so it stays off next time you enter.
+     Turning it back on clears the flag. Chosen over flipping the property default precisely so
+     "off" sticks.
+3. ✅ **`DEFAULT_CLOSED` on nine panels** — Walkways, Structures, Props, Ground, Fences,
+   Utilities, Foliage, UE Pipeline, Face Magnet (Pipes/Cables/Vents/Scatter already had it).
+   **The sidebar now opens with 2 of 15 panels expanded: Build Mode and Global Settings.**
+
+Headless test (`--factory-startup`, Blender 5.1): 15 panels register, Build Mode is index 0,
+the opt-out property exists defaulting False, `BUILD_MODE` is a live entry in
+`_PREVIEW_REGISTRY` (so the auto-enable cannot silently no-op), and both idempotency cases hold.
+
+**Deliberately NOT done** — the deeper restructure below. Folding the panels shut got the
+fatigue win for ~11 lines; regrouping them into "Parametric (legacy)" and "Decorators" parents
+is a real refactor and should be its own sitting, if it is still wanted at all once the folded
+sidebar has been lived in.
+
+**Remaining scope (deferred, in order of payoff):**
 1. **Build Mode becomes its own top-level panel, ordered first.** Pure cut-and-lift out of
    `WBTK_PT_Structures`; no behaviour change.
 2. **Live preview on by default when entering Build Mode** — set it in the toggle operator, not by
