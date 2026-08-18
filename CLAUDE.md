@@ -500,6 +500,44 @@ repro.
   `operators_pipes.py`; unused `wbtk_barrel_rib_width` read in
   `operators_props.py`
 
+### ⚠️ UI OVERHAUL — Build Mode is buried (raised by Jermaine 2026-08-17)
+
+**Jermaine: "WBTK needs a UI overhaul, I am getting some serious fatigue. Build Mode should be the
+primary focus and Live Preview should just be default."** Measured against `ui.py` the same day,
+and the complaint understates it:
+
+- **Build Mode is not a panel at all.** It is a *section inside* `WBTK_PT_Structures`, starting at
+  line 265 of a **437-line** panel — the largest by far, bigger than the next four combined. You
+  reach the documented PRIMARY workflow by scrolling ~156 lines past the Wall, Room, **Building
+  Shell** and **Building Row** generators.
+- The generators you scroll past are the ones the **Strategic Pivot superseded** — parametric
+  shell and Block Composer are Buildify's job now.
+- **14 top-level panels** register. Of those, Pipes, Cables, Fences, Foliage, Scatter and Vents are
+  all decorators the pivot handed to **BagaPie**.
+- **Live preview defaults to `False`** (`properties.py:811`) and Build Mode's toggle never enables
+  it — the only place `bm_operators.py` touches live preview is Cleanup, to tear it down. So the
+  primary workflow starts with its preview off, every time.
+
+So the tool's shape still reflects the pre-pivot world: the superseded paths are the loudest thing
+on screen and the primary one is hidden inside them.
+
+**Proposed scope (bounded, in order of payoff):**
+1. **Build Mode becomes its own top-level panel, ordered first.** Pure cut-and-lift out of
+   `WBTK_PT_Structures`; no behaviour change.
+2. **Live preview on by default when entering Build Mode** — set it in the toggle operator, not by
+   flipping the property default, so a user can still switch it off and have that stick per-session.
+3. Parametric shell + Block Composer collapse into one **"Parametric (legacy)"** panel, closed by
+   default.
+4. Decorator panels collapse into a **"Decorators"** group, closed by default, flagged as
+   BagaPie candidates.
+
+That takes 14 visible panels to ~4 without deleting a single feature.
+
+**The stated blocker on `ui.py` is gone.** `CLAUDE_WBTK_flow_pass_BuildMode.md` §159 deferred this
+because "ui.py carries old uncommitted sweep drift". That was **disproved 2026-08-08** — every
+modified .py in this repo including ui.py is byte-identical to HEAD. The 24 unguarded reads are
+real and still Session 6's job, but items 1 and 2 above do not touch them.
+
 ### Behavioral pass (Session 6)
 
 - Remove PANELED/RIBBED/TILED from wall style enum (Risk 1; cancellation
