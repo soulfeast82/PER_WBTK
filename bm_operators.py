@@ -57,11 +57,26 @@ class OP_ToggleMode(bpy.types.Operator):
                 context.space_data.shading.color_type = 'OBJECT'
             except Exception:
                 pass
-            # Live preview ON by default -- Build Mode is the primary workflow
-            # and used to start with its preview off every single time. Honours
-            # a manual opt-out (see properties.wbtk_bm_preview_optout).
-            if not getattr(scene, 'wbtk_bm_preview_optout', False):
-                _set_live_preview(context, True)
+            # ⚠️ AUTO-ENABLE REVERTED 2026-08-17, same day it shipped.
+            #
+            # Entering Build Mode used to switch live preview on here. Pulled
+            # after reading the crash logs: 4 of 22 reports mention live
+            # preview, and one from 12:54 that day crashed in
+            # DepsgraphNodeBuilder::build_materials on this exact trail --
+            #     Build Mode ON -> bm_add_block -> live_preview_toggle(BUILD_MODE)
+            #     -> wbtk_bm_width = 8 -> crash
+            # Suggestive rather than proven (1 of 22 carries that signature),
+            # but defaulting every Build Mode session into a code path that
+            # appears in crash reports is not a trade worth making for one
+            # click. Jermaine's call, 2026-08-17.
+            #
+            # To restore, this is the whole change:
+            #     if not getattr(scene, 'wbtk_bm_preview_optout', False):
+            #         _set_live_preview(context, True)
+            # The opt-out property and the get-or-set helper are deliberately
+            # KEPT so that stays a one-line revert. Turning the preview OFF on
+            # exit (below/above) is unrelated to this and stays -- it fixes a
+            # real leak where nothing but Cleanup ever tore the preview down.
             # Start shortcut listener
             context.window_manager.modal_handler_add(self)
             self.report({'INFO'}, "Build Mode ON — A=add S=stack D=dupe X=del G=gen")

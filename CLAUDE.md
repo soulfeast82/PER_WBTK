@@ -539,6 +539,52 @@ output to **zero**. Every other assertion checks our data; that one checks Build
 ⚠️ Recorded in `_gamedocs/BUILDIFY_INTEGRATION_v1.md`: a **fresh** Buildify modifier ignores
 `building:levels` completely, because `- Randomize floor numbers -` defaults to True.
 
+### Blender crash logs, read properly (2026-08-17) - and a default reverted
+
+I had twice blamed the `clean_mesh` addon for the repeated Blender crashes and recommended
+disabling it. **Both claims were wrong**, and reading the actual evidence says so:
+
+- `clean_mesh` **was already disabled** - installed as `bl_ext.user_default.clean_mesh`,
+  `enabled: false`, and absent from every handler list. Disabling it would have been a no-op
+  reported as a fix.
+- The `tag_redraw` AttributeError story was also wrong. **No depsgraph handler calls it.**
+  ERAT's four `tag_redraw` calls all sit in operator `execute` / `invoke` / `modal` methods,
+  and the only one that could see a `None` area is already guarded with `if context.area:`.
+
+**What 22 crash reports actually say:**
+
+| signature | count | notes |
+|---|---|---|
+| **`rna_KeyMap_item_remove`** | **12 of 22 (55%)** | 10 inside `py_timer_execute`. March -> August. |
+| `ANIM_armature_runtime_refresh` | 3 | |
+| `DepsgraphNodeBuilder::build_materials` | 1 | the WBTK one, see below |
+| others | 6 | |
+
+The keymap crash is `km.keymap_items.remove(kmi)` in an addon's `unregister()` walking stale
+pointers. Addons here that both run timers and remove keymaps: **HOps, Boxcutter,
+Sanctus-Library, Sanctus-Bake, Substance3DInBlender**. Verified that **neither WBTK nor ERAT
+registers any keymap**, so our addons are not the source of the dominant crash.
+
+**The one that IS ours.** `PER_DW_Kit.crash.txt`, 12:54, operator trail:
+
+    Build Mode ON -> bm_add_block -> live_preview_toggle(BUILD_MODE)
+    -> wbtk_bm_width = 8 -> crash in DepsgraphNodeBuilder::build_materials
+
+Live preview appears in **4 of the 22** reports. So the same-day decision to make live preview
+default-on in Build Mode was **reverted by Jermaine's call**: the panel move, the exit-cleanup
+(a real leak fix - nothing but Cleanup ever tore the preview down) and the opt-out property all
+stay; only the auto-enable is gone, commented in place so restoring it is one line.
+
+Unproven as causation - 1 report of 22 carries that signature - but defaulting every Build Mode
+session into a code path that shows up in crash logs is not worth one saved click.
+
+**Also cleaned:** 32 WBTK module files were sitting loose in the Blender addons ROOT, left over
+from the junction setup - 18 exact duplicates and 14 **stale older copies** (the loose `ui.py`
+was 1.6 KB behind the repo). Blender scanned and warned on each, and generic names like
+`utils.py`, `config.py`, `ui.py` and a bare `__init__.py` at the addons root can shadow other
+addons' imports. All 32 verified as WBTK by provenance before removal; the 14 genuine
+standalone addons were untouched and the `PER_WBTK` junction is intact.
+
 ### ⚠️ UI OVERHAUL — Build Mode is buried (raised by Jermaine 2026-08-17)
 
 **Jermaine: "WBTK needs a UI overhaul, I am getting some serious fatigue. Build Mode should be the
