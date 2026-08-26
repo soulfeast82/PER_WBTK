@@ -274,7 +274,7 @@ class OP_GenerateMetalBarrel(OP_BaseGenerator):
 
         # Auto Smooth (Blender 5.0 compatible)
         if hasattr(barrel_obj.data, 'set_sharp_from_angle'):
-            barrel_obj.data.set_sharp_from_angle(math.radians(60))
+            barrel_obj.data.set_sharp_from_angle(angle=math.radians(60))
         barrel_obj.data.polygons.foreach_set("use_smooth", [True] * len(barrel_obj.data.polygons))
         barrel_obj.data.update()
 

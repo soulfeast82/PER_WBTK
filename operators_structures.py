@@ -161,7 +161,7 @@ class OP_GenerateBuildingShell(OP_BaseGenerator):
                 mesh_data = obj.data
                 mesh_data.polygons.foreach_set("use_smooth", [True] * len(mesh_data.polygons))
                 if hasattr(mesh_data, 'set_sharp_from_angle'):
-                    mesh_data.set_sharp_from_angle(math.radians(30.0))
+                    mesh_data.set_sharp_from_angle(angle=math.radians(30.0))
                 mesh_data.update()
             except Exception as e:
                 print(f"Warning: smoothing failed for {name}: {e}")
