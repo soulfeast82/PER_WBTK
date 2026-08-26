@@ -267,6 +267,11 @@ class WBTK_PT_BuildMode(WBTK_PanelBase):
         row_bfy.operator("wbtk.export_buildify_footprints",
                          text="Export Footprints for Buildify", icon='EXPORT')
 
+        # Kit Validator - Buildify's module contract + PER's standing checks.
+        row_val = box_bm.row()
+        row_val.operator("wbtk.validate_kit",
+                         text="Validate Kit", icon='CHECKMARK')
+
         # --- Cleanup (destructive, always visible in the Build Mode section) ---
         box_bm.separator(factor=2.0)
         row_cleanup = box_bm.row()

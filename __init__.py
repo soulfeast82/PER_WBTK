@@ -77,6 +77,9 @@ from . import operators_block_composer
 # Buildify bridge (Strategic Pivot item #1: footprints -> Buildify)
 from . import operators_buildify
 
+# Kit Validator (pivot item #4)
+from . import operators_kit_validator
+
 # Footprint Painter
 
 # Custom Builder (Viewport Block Painter)
@@ -105,6 +108,7 @@ _classes_to_register = (
     *operators_region_dna._classes_to_register,
     *operators_block_composer._classes_to_register,
     *operators_buildify._classes_to_register,
+    *operators_kit_validator._classes_to_register,
     *bm_operators._classes,
     *bm_details._classes,
     *ui._classes_to_register,

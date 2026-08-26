@@ -1,0 +1,221 @@
+# World_Building_Toolkit/operators_kit_validator.py
+#
+# Kit Validator - Strategic Pivot item #4.
+#
+# Enforces two rule sets, because the kit answers to two masters:
+#
+#   * Buildify's MODULE CONTRACT (_gamedocs/BUILDIFY_INTEGRATION_v1.md section 1) -
+#     what a module must satisfy or Buildify silently builds the wrong thing.
+#   * PER's own STANDING CHECKS - learned in the railing batch, where four meshes
+#     shipped inside-out and watertight/dimensions/UE-import ALL passed.
+#
+# The signed-volume check is what earns this operator its place. It is the only
+# check that catches inverted normals [RATIFIED 2026-08-24]. Reference value:
+# SM_DW_Landing_200x200_A reads +0.8.
+#
+# RULES ARE APPLIED PER DESTINATION, which BUILDIFY_INTEGRATION_v1 section 1 rule 2
+# demands - "the validator enforces per destination. Do not 'fix' one convention to
+# match the other." Concretely:
+#
+#   * Pivot rules run ONLY on Buildify-destined modules. PIVOT LAW v2 is per-family,
+#     and a cantilever hangs BELOW its attach point, a rail cap sits ON TOP of a post
+#     and a railing starts above the floor. Failing those would be the validator
+#     being wrong, not the mesh.
+#   * The X-centred rule is enforced; the Y rule is REPORTED and never failed. Walls
+#     carry a Y-back pivot while Buildify's manual says bottom-centre, and a complete
+#     building has already generated from this kit - so Y-back demonstrably works.
+#   * Signed volume is only meaningful on a CLOSED shell. On an open mesh the number
+#     is arbitrary, so an open shell is reported as open and its volume is not judged.
+#
+# Not checkable here: contract 6 (module height is a modifier declaration), contract 7
+# (flat base geometry - about footprints, not kit pieces), contract 8 (one style per
+# object - a human judgement).
+
+import bpy
+import bmesh
+
+# Pillar order Buildify requires, as it must appear when sorted ALPHABETICALLY. Link
+# order is irrelevant - Collection Info sorts by name, which is why the ordinal in
+# Pillar1Flat / Pillar2CC / Pillar3CV is load-bearing rather than cosmetic.
+_PILLAR_ORDER = ("FLAT", "CC", "CV")
+
+# The families Buildify actually consumes, per BUILDIFY_INTEGRATION_v1 section 4 item 2.
+# Only these answer to the pivot half of the contract.
+_BUILDIFY_TOKENS = ("WALL", "PILLAR", "TOPTRIM")
+
+# Float32 vertex eps at ~2 m is ~0.12 um, so 0.1 mm sits well above the noise floor
+# and well below any real authoring error.
+_PIVOT_EPS = 1e-4
+_XFORM_EPS = 1e-6
+
+
+def _is_buildify_module(name):
+    upper = name.upper()
+    return any(t in upper for t in _BUILDIFY_TOKENS)
+
+
+def _pillar_rank(name):
+    """FLAT/CC/CV rank from an object name, or -1 if it is not a pillar."""
+    upper = name.upper()
+    if "PILLAR" not in upper:
+        return -1
+    for rank, token in enumerate(_PILLAR_ORDER):
+        if token in upper:
+            return rank
+    return -1
+
+
+class OP_ValidateKit(bpy.types.Operator):
+    """Check kit meshes against Buildify's module contract and PER's standing checks"""
+    bl_idname = "wbtk.validate_kit"
+    bl_label = "Validate Kit"
+    bl_description = ("Check the selected meshes (or every mesh, if nothing is selected) "
+                      "against Buildify's module contract and PER's standing checks")
+    bl_options = {'REGISTER'}
+
+    def _targets(self, context):
+        sel = [o for o in context.selected_objects if o.type == 'MESH']
+        if sel:
+            return sel, "selection"
+        return [o for o in context.scene.objects if o.type == 'MESH'], "scene"
+
+    def _check_mesh(self, obj):
+        """Returns (failures, notes) for one object."""
+        fails, notes = [], []
+
+        # --- Contract 1: applied rotation and scale. Applies to EVERY mesh. --------
+        if not all(abs(a) < _XFORM_EPS for a in obj.rotation_euler):
+            fails.append("unapplied ROTATION")
+        if not all(abs(s - 1.0) < _XFORM_EPS for s in obj.scale):
+            fails.append("unapplied SCALE")
+
+        # --- Contract 2: pivot. Buildify-destined modules ONLY. -------------------
+        xs = [c[0] for c in obj.bound_box]
+        ys = [c[1] for c in obj.bound_box]
+        zs = [c[2] for c in obj.bound_box]
+        if _is_buildify_module(obj.name):
+            if abs(min(zs)) > _PIVOT_EPS:
+                fails.append("origin not at BASE (z_min=%.4f)" % min(zs))
+            if abs((min(xs) + max(xs)) * 0.5) > _PIVOT_EPS:
+                fails.append("origin not centred in X")
+            y_mid = abs((min(ys) + max(ys)) * 0.5) <= _PIVOT_EPS
+            notes.append("Y pivot %s" % ("centred" if y_mid
+                                         else "back" if abs(min(ys)) <= _PIVOT_EPS else "other"))
+
+        # --- PER standing checks --------------------------------------------------
+        bm = bmesh.new()
+        try:
+            bm.from_mesh(obj.data)
+            if not bm.faces:
+                fails.append("no faces")
+                return fails, notes
+            open_edges = sum(1 for e in bm.edges if len(e.link_faces) != 2)
+            if open_edges:
+                # Volume is arbitrary on an open shell, so do not judge it. Some kit
+                # pieces are open by design (a cable segment is a tube with cut ends).
+                notes.append("OPEN shell (%d edge(s) with a face count != 2) - "
+                             "signed volume not judged" % open_edges)
+            else:
+                volume = bm.calc_volume(signed=True)
+                # THE check. Watertight, unsigned volume, dimensions and a clean UE
+                # import will all pass on an inside-out mesh; only this catches it.
+                if volume <= 0.0:
+                    fails.append("signed volume NOT POSITIVE (%+.4f) - normals are INVERTED. "
+                                 "Fix with bmesh.ops.recalc_face_normals" % volume)
+        finally:
+            bm.free()
+
+        return fails, notes
+
+    def _check_pillar_order(self, objects):
+        """Contract 4, per collection."""
+        fails = []
+        by_collection = {}
+        for obj in objects:
+            if _pillar_rank(obj.name) < 0:
+                continue
+            for coll in obj.users_collection:
+                by_collection.setdefault(coll.name, []).append(obj.name)
+
+        for coll_name, names in sorted(by_collection.items()):
+            ranks = [_pillar_rank(n) for n in sorted(names)]
+            if ranks != sorted(ranks):
+                fails.append("'%s': sorted alphabetically these read %s, so Buildify picks the "
+                             "WRONG pillar for each corner - put an ordinal in the name "
+                             "(Pillar1Flat / Pillar2CC / Pillar3CV)"
+                             % (coll_name, ", ".join(sorted(names))))
+        return fails
+
+    def _check_one_module_size(self, objects):
+        """Contract 5. Wall modules in one building must share a single size."""
+        sizes = {}
+        for obj in objects:
+            if "WALL" not in obj.name.upper():
+                continue
+            key = tuple(round(v, 3) for v in obj.dimensions)
+            sizes.setdefault(key, []).append(obj.name)
+        if len(sizes) > 1:
+            detail = " | ".join("%s: %s" % ("x".join("%.2f" % v for v in k), ", ".join(sorted(n)))
+                                for k, n in sorted(sizes.items()))
+            return ["more than one wall module size - Buildify supports exactly one per "
+                    "building. Found %d: %s" % (len(sizes), detail)]
+        return []
+
+    def execute(self, context):
+        objects, scope = self._targets(context)
+        if not objects:
+            self.report({'WARNING'}, "No mesh objects to validate.")
+            return {'CANCELLED'}
+
+        failures, notes = {}, {}
+        for obj in objects:
+            f, n = self._check_mesh(obj)
+            if f:
+                failures[obj.name] = f
+            if n:
+                notes[obj.name] = n
+
+        kit_fails = self._check_pillar_order(objects) + self._check_one_module_size(objects)
+
+        print("\n--- WBTK Kit Validator (%d mesh(es), from %s) ---" % (len(objects), scope))
+        for name in sorted(failures):
+            print("  FAIL  %s" % name)
+            for f in failures[name]:
+                print("          - %s" % f)
+        for f in kit_fails:
+            print("  FAIL  kit-level: %s" % f)
+        for name in sorted(notes):
+            print("  note  %s: %s" % (name, "; ".join(notes[name])))
+        clean = len(objects) - len(failures)
+        print("  %d/%d clean, %d kit-level issue(s)" % (clean, len(objects), len(kit_fails)))
+        print("--- end ---\n")
+
+        total = len(failures) + len(kit_fails)
+        if not total:
+            self.report({'INFO'}, "Kit Validator: %d/%d clean. Contract + standing checks pass."
+                        % (clean, len(objects)))
+            return {'FINISHED'}
+
+        lines = ["%s: %s" % (n, "; ".join(failures[n])) for n in sorted(failures)]
+        lines.extend(kit_fails)
+
+        def draw(popup, _context):
+            col = popup.layout.column(align=True)
+            for line in lines[:20]:
+                col.label(text=line, icon='ERROR')
+            if len(lines) > 20:
+                col.label(text="...and %d more - full report in the Console."
+                          % (len(lines) - 20))
+            else:
+                col.label(text="Full report in Window > Toggle System Console.")
+
+        context.window_manager.popup_menu(draw, title="Kit Validator", icon='CHECKMARK')
+        self.report({'WARNING'}, "Kit Validator: %d issue(s) across %d mesh(es). See Console."
+                    % (total, len(failures)))
+        return {'FINISHED'}
+
+
+# --- List of Operator Classes to Register from THIS file ---
+_classes_to_register = (
+    OP_ValidateKit,
+)
