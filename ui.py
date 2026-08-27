@@ -272,6 +272,13 @@ class WBTK_PT_BuildMode(WBTK_PanelBase):
         row_val.operator("wbtk.validate_kit",
                          text="Validate Kit", icon='CHECKMARK')
 
+        # Summon Build Engine - wires Buildify to the DW kit and drives it from
+        # the footprint. This is what makes Generate look like the kit.
+        row_eng = box_bm.row()
+        row_eng.scale_y = 1.3
+        row_eng.operator("wbtk.summon_build_engine",
+                         text="Summon Build Engine", icon='MOD_BUILD')
+
         # --- Cleanup (destructive, always visible in the Build Mode section) ---
         box_bm.separator(factor=2.0)
         row_cleanup = box_bm.row()
