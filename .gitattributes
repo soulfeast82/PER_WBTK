@@ -1,0 +1,7 @@
+# Python is authored and stored LF. Without this, core.autocrlf=true makes every
+# .py show as modified while being byte-identical to HEAD -- phantom changes that
+# have twice been mistaken for lost sweep work (see CLAUDE.md, 2026-08-08 audit).
+*.py text eol=lf
+*.md text eol=lf
+*.blend binary
+*.fbx binary
