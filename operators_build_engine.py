@@ -73,10 +73,27 @@ _SOCKET_MAP = {
 # Ground floor gets the door; upper floors do not - a door on floor three reads as
 # an error, and Buildify picks one module per edge at random from what it is given.
 _KIT_MAP = {
-    "ground_floor_walls": ["SM_DW_Wall_400x350_A", "SM_DW_WallDoor_400x350_A",
-                           "SM_DW_WallWindow_400x350_A", "SM_DW_WallWindowPair_400x350_A"],
-    "middle_floor_walls": ["SM_DW_Wall_400x350_A", "SM_DW_WallWindow_400x350_A",
-                           "SM_DW_WallWindowPair_400x350_A"],
+    # COMBINED wall+infill modules [RATIFIED 2026-08-26]. The bare walls are NOT used
+    # here: Buildify places one module per edge and never seats an insert, so a bare
+    # wall tiles as a HOLE. The plain wall stays in the list as the accretion ruling's
+    # "bricked-up" state, which is the one case where no opening is correct.
+    #
+    # Ground floor reads as occupied - door, glazing, and some blank frontage. Upper
+    # floors carry the full infill spread, which is how the accretion ruling's "no two
+    # bays identical" gets enforced by the engine rather than by anyone remembering it.
+    "ground_floor_walls": ["SM_DW_BfyWall_Door_400x350_A",
+                           "SM_DW_BfyWall_WinClosed_400x350_A",
+                           "SM_DW_BfyWall_PairClosed_400x350_A",
+                           "SM_DW_Wall_400x350_A"],
+    "middle_floor_walls": ["SM_DW_BfyWall_WinClosed_400x350_A",
+                           "SM_DW_BfyWall_WinBoarded_400x350_A",
+                           "SM_DW_BfyWall_WinShuttered_400x350_A",
+                           "SM_DW_BfyWall_WinTarped_400x350_A",
+                           "SM_DW_BfyWall_WinOpen_400x350_A",
+                           "SM_DW_BfyWall_PairClosed_400x350_A",
+                           "SM_DW_BfyWall_PairMixed_400x350_A",
+                           "SM_DW_BfyWall_PairBoarded_400x350_A",
+                           "SM_DW_Wall_400x350_A"],
     "ground_floor_pillars": ["SM_DW_Pillar1Flat_100x350_A", "SM_DW_Pillar2CC_100x350_A",
                              "SM_DW_Pillar3CV_100x350_A"],
     "middle_floor_pillars": ["SM_DW_Pillar1Flat_100x350_A", "SM_DW_Pillar2CC_100x350_A",
