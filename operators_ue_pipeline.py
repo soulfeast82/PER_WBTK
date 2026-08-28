@@ -339,9 +339,198 @@ class WBTK_OT_AutoTagForExport(bpy.types.Operator):
 # REGISTRATION
 # =============================================================================
 
+
+# =============================================================================
+# OPERATOR 5 - Realize a Buildify building and export it to UE
+# =============================================================================
+#
+# Strategic Pivot item #5, the last leg of the arc. Summon Build Engine gives a
+# real Dusk Ward building in Blender; until this existed there was no way to get
+# it into Unreal, because Buildify's output is INSTANCES and nothing downstream
+# reads instances.
+#
+# The documented chain is "Realize Instances -> visual geometry to mesh -> UV
+# attribute convert -> FBX". This walks the evaluated depsgraph rather than
+# driving bpy.ops:
+#
+#   * object.convert / duplicates_make_real need a correct window context, and
+#     operator context is unreliable when the addon is driven headlessly or over
+#     a tool bridge - object.join silently no-opped nine times in a row during
+#     the combined-module build for exactly this reason.
+#   * depsgraph.object_instances is the same source that COUNTS them, so the
+#     thing exported is provably the thing measured.
+#
+# UV note: Buildify instances the kit's own OBJECTS, so each instance arrives
+# carrying the kit mesh's real UV layers - there is no generic attribute to
+# convert. The "UV attribute convert" step in the pivot's wording applies to
+# node-GENERATED geometry. This reports UV coverage instead of pretending.
+
+
+def _harvest(obj, depsgraph, name):
+    """Walk the evaluated instances of *obj* and fold them into ONE mesh.
+
+    Geometry is extracted INSIDE the iteration on purpose. A
+    DepsgraphObjectInstance - and the object it hands back - is invalidated the
+    moment the walk ends, so collecting them into a list and reading their
+    meshes afterwards raises "StructRNA of type DepsgraphObjectInstance has been
+    removed". Found by running this operator, not by reading about it.
+
+    Material slots are unioned BY NAME. Unioning by index would silently repaint
+    geometry whenever two modules carry different materials in the same slot.
+    """
+    verts, faces, mats = [], [], []
+    kinds, no_uv = {}, set()
+    count = 0
+
+    for inst in depsgraph.object_instances:
+        if not inst.is_instance:
+            continue
+        if not (inst.parent and inst.parent.original is obj):
+            continue
+        src = inst.object
+        me = src.data
+        if me is None or not me.polygons:
+            continue
+
+        count += 1
+        oname = src.original.name if src.original else src.name
+        kinds[oname] = kinds.get(oname, 0) + 1
+        if not me.uv_layers:
+            no_uv.add(oname)
+
+        mtx = inst.matrix_world.copy()
+        slots = [ms.material.name if ms.material else None for ms in src.material_slots]
+        base = len(verts)
+        verts.extend(tuple(mtx @ v.co) for v in me.vertices)
+        for poly in me.polygons:
+            faces.append(tuple(i + base for i in poly.vertices))
+            mats.append(slots[poly.material_index] if poly.material_index < len(slots) else None)
+
+    if not count:
+        return None, [], 0, {}, []
+
+    ordered = []
+    for n in mats:
+        if n is not None and n not in ordered:
+            ordered.append(n)
+
+    out = bpy.data.meshes.new(name + "_Mesh")
+    out.from_pydata(verts, [], faces)
+    out.validate(verbose=False)
+    for n in ordered:
+        m = bpy.data.materials.get(n)
+        if m:
+            out.materials.append(m)
+    idx = {mat.name: i for i, mat in enumerate(out.materials)}
+    for poly, n in zip(out.polygons, mats):
+        if n in idx:
+            poly.material_index = idx[n]
+    out.update()
+    return out, [m.name for m in out.materials], count, kinds, sorted(no_uv)
+
+
+class WBTK_OT_ExportBuildifyToUE(bpy.types.Operator):
+    """Realize the selected Buildify building into one mesh and export it for Unreal"""
+    bl_idname = "wbtk.export_buildify_to_ue"
+    bl_label = "Realize + Export Building"
+    bl_description = ("Realize the Buildify instances on the active object into a single mesh "
+                      "in the UE_Export collection, and optionally write an FBX beside the .blend")
+    bl_options = {'REGISTER', 'UNDO'}
+
+    write_fbx: bpy.props.BoolProperty(
+        name="Write FBX",
+        description="Also write an FBX beside the .blend. Uncheck to realize only",
+        default=True,
+    )
+    mesh_name: bpy.props.StringProperty(
+        name="Name",
+        description="Name for the realized mesh and the FBX",
+        default="SM_DW_Building_A",
+    )
+
+    def execute(self, context):
+        import os
+
+        obj = context.active_object
+        if obj is None or obj.type != 'MESH':
+            self.report({'ERROR'}, "Select the footprint that carries the Buildify modifier.")
+            return {'CANCELLED'}
+        if not any(m.type == 'NODES' for m in obj.modifiers):
+            self.report({'ERROR'},
+                        "'%s' has no geometry-nodes modifier - run Summon Build Engine first."
+                        % obj.name)
+            return {'CANCELLED'}
+
+        prev = bpy.data.objects.get(self.mesh_name)
+        if prev:
+            d = prev.data
+            bpy.data.objects.remove(prev, do_unlink=True)
+            if d and d.users == 0:
+                bpy.data.meshes.remove(d)
+
+        obj.update_tag()
+        context.view_layer.update()
+        dg = context.evaluated_depsgraph_get()
+        me, slots, n_inst, kinds, uv_missing = _harvest(obj, dg, self.mesh_name)
+        if me is None:
+            self.report({'ERROR'},
+                        "'%s' emitted no instances. Buildify produces nothing when its module "
+                        "collections are empty or building:levels is missing." % obj.name)
+            return {'CANCELLED'}
+        out = bpy.data.objects.new(self.mesh_name, me)
+        coll = bpy.data.collections.get(Config.EXPORT_COLLECTION)
+        if coll is None:
+            coll = bpy.data.collections.new(Config.EXPORT_COLLECTION)
+            context.scene.collection.children.link(coll)
+        coll.objects.link(out)
+
+        print("")
+        print("--- WBTK Realize + Export Building ---")
+        print("  source        : %s" % obj.name)
+        print("  instances     : %d across %d distinct modules" % (n_inst, len(kinds)))
+        print("  realized mesh : %d verts / %d polys" % (len(me.vertices), len(me.polygons)))
+        print("  material slots: %s" % (", ".join(slots) if slots else "none"))
+        if uv_missing:
+            print("  NO UV LAYER   : %s" % ", ".join(uv_missing))
+
+        msg = "%d instances -> %s (%d verts, %d slots)" % (
+            n_inst, self.mesh_name, len(me.vertices), len(slots))
+
+        if self.write_fbx:
+            if not bpy.data.filepath:
+                self.report({'WARNING'},
+                            msg + " - realized only; save the .blend to get an FBX path.")
+                print("--- end ---")
+                return {'FINISHED'}
+            path = os.path.join(os.path.dirname(bpy.data.filepath), self.mesh_name + ".fbx")
+            for o in list(context.selected_objects):
+                o.select_set(False)
+            out.select_set(True)
+            context.view_layer.objects.active = out
+            # Settings ratified in operators_walkways.py:793. No path_mode - COPY
+            # writes 104 MB of .fbm alongside every export.
+            bpy.ops.export_scene.fbx(
+                filepath=path, use_selection=True, object_types={'MESH', 'EMPTY'},
+                apply_scale_options='FBX_SCALE_NONE', bake_space_transform=True,
+                use_mesh_modifiers=True, mesh_smooth_type='FACE',
+                add_leaf_bones=False, bake_anim=False, use_metadata=False)
+            size = os.path.getsize(path) if os.path.exists(path) else 0
+            print("  fbx           : %s (%d bytes)" % (path, size))
+            msg += " - FBX %d bytes" % size
+
+        print("--- end ---")
+        self.report({'INFO'}, msg)
+        return {'FINISHED'}
+
+
+# =============================================================================
+# Class list
+# =============================================================================
+
 _classes_to_register = (
     WBTK_OT_CheckUEScale,
     WBTK_OT_SendToExportCollection,
     WBTK_OT_FaceMagnet,
     WBTK_OT_AutoTagForExport,
+    WBTK_OT_ExportBuildifyToUE,
 )

@@ -841,6 +841,19 @@ class WBTK_PT_UEPipeline(WBTK_PanelBase):
 
         layout.separator()
 
+        # --- Buildify -> UE (Strategic Pivot item #5) ---
+        # Buildify emits INSTANCES; nothing downstream reads them. This realizes
+        # them into one mesh in UE_Export and writes the FBX.
+        box_bfy = layout.box()
+        box_bfy.label(text="Buildify Building", icon='MOD_BUILD')
+        box_bfy.label(text="Select the footprint carrying the modifier", icon='INFO')
+        row_bfy = box_bfy.row()
+        row_bfy.scale_y = 1.3
+        row_bfy.operator("wbtk.export_buildify_to_ue",
+                         text="Realize + Export Building", icon='EXPORT')
+
+        layout.separator()
+
         # --- Export Collection ---
         box_export = layout.box()
         box_export.label(text="UE Export Collection", icon='EXPORT')
