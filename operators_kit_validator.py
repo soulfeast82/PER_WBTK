@@ -34,6 +34,13 @@
 import bpy
 import bmesh
 
+# The ruled projection, imported rather than restated so the check and the tool that
+# writes it cannot drift apart. A validator carrying its own copy of the convention
+# would pass a mesh the operator can no longer produce.
+from .operators_box_uv import _AXIS_MAP
+from .operators_box_uv import DEFAULT_DIVISOR as _RULED_DIVISOR
+from .operators_box_uv import DEFAULT_LAYER as _RULED_LAYER
+
 # Pillar order Buildify requires, as it must appear when sorted ALPHABETICALLY. Link
 # order is irrelevant - Collection Info sorts by name, which is why the ordinal in
 # Pillar1Flat / Pillar2CC / Pillar3CV is load-bearing rather than cosmetic.
@@ -219,6 +226,61 @@ class OP_ValidateKit(bpy.types.Operator):
         if (max(us) - min(us)) < _UV_EPS and (max(vs) - min(vs)) < _UV_EPS:
             return ("UV layer '%s' is DEGENERATE - all %d loops at (%.3f, %.3f). "
                     "Untexturable; same as having none." % (layer.name, len(us), us[0], vs[0]))
+
+        # Presence and spread were the whole check until 2026-08-29, and they pass on
+        # a smart-project, on trim-row UVs, and on the ruled projection at the wrong
+        # divisor - three different surfaces that all "have UVs". So now conformance
+        # is measured against the projection itself, reusing operators_box_uv's map
+        # so the check and the tool cannot drift apart.
+        return self._check_projection(obj, layer)
+
+    def _check_projection(self, obj, layer):
+        """Does this layer match the ruled box projection, and at what divisor?
+
+        The divisor is DERIVED rather than assumed: for a conforming layer, every
+        loop satisfies co[axis] = uv * D for a single D, so D is measured and then
+        compared against the ruled 4.0 (= 512 px/m at 2K). That distinguishes 'wrong
+        projection' from 'right projection, wrong density', which are different bugs
+        with different fixes.
+
+        A non-conforming layer is REPORTED, not failed: 0-1 packed UVs are correct
+        for a Painter-bound mesh and wrong for a tiling one, and this operator does
+        not know a mesh's destination. KIT_TEXTURE_ROUTING_v1.md does.
+        """
+        me = obj.data
+        ratios, off = [], 0
+        for poly in me.polygons:
+            n = poly.normal
+            d = max(range(3), key=lambda i: abs(n[i]))
+            ui, vi = _AXIS_MAP[d]
+            for li in poly.loop_indices:
+                co = me.vertices[me.loops[li].vertex_index].co
+                uv = layer.data[li].uv
+                for axis, val in ((ui, uv[0]), (vi, uv[1])):
+                    c = co[axis]
+                    if abs(val) < _UV_EPS:
+                        if abs(c) > _PIVOT_EPS:
+                            off += 1          # uv pinned at 0 where the coord is not
+                    else:
+                        ratios.append(c / val)
+
+        if not ratios:
+            return "UV layer '%s' carries no usable ratio - cannot judge" % layer.name
+
+        d0 = sorted(ratios)[len(ratios) // 2]          # median: robust to a few strays
+        bad = sum(1 for r in ratios if abs(r - d0) > 1e-4) + off
+        if bad:
+            return ("UV layer '%s' does NOT match the ruled box projection - %d of %d "
+                    "components off. Correct for a Painter-bound mesh (0-1 packed), wrong "
+                    "for a tiling one. See KIT_TEXTURE_ROUTING_v1.md"
+                    % (layer.name, bad, len(ratios) + off))
+        if abs(d0 - _RULED_DIVISOR) > 1e-4:
+            return ("UV layer '%s' matches the box projection but at 1/%.4g, not the ruled "
+                    "1/%.4g - texel density is %.0f px/m at 2K, not 512"
+                    % (layer.name, d0, _RULED_DIVISOR, 2048.0 / d0))
+        if layer.name != _RULED_LAYER:
+            return ("UV layer is correct but named '%s'; the 8 reference meshes use '%s'"
+                    % (layer.name, _RULED_LAYER))
         return None
 
     def _check_pillar_order(self, objects):
