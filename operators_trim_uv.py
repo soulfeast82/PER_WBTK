@@ -55,11 +55,38 @@ _NAME_TO_ROW = {
 # success. Antennas, tanks, cables, barriers and railings were all being told they
 # were wall.
 #
-# The keys are also stale against the kit's vocabulary: "Walls" is plural but every
-# kit mesh reads `SM_DW_Wall_...`, "Column"/"Corner" never match `Pillar`, "Bands"/
-# "Ledge" never match `TopTrim`, "Floor"/"Slab" never match `Grating`/`Landing`/
-# `Stair`, and "Window" never matches the `_Win` abbreviation. Widening the map is a
-# texturing decision, not a rename, so it is left for Jermaine rather than guessed at.
+# CORRECTION 2026-08-28, and the earlier wording here was WRONG in a way that would
+# have caused damage. It said the keys were "stale" and that the parametric
+# generator's children "do not match either, so the default is load-bearing there".
+# Both halves are false, and measuring the generator rather than the kit says so:
+#
+#   Walls Bands Ledge Corner Column Sill Plinth Parapet Floor are NOT stale. They are
+#   the PARAMETRIC SHELL GENERATOR's vocabulary. operators_structures.py creates
+#   children named Shell_Walls (409), Shell_Corners (413), Shell_Bands (415),
+#   Shell_Sills (417), Shell_Ledges (419), Shell_Parapet (421), Shell_Plinth (423)
+#   and Room_Floor (103), each paired 1:1 with the matching MATERIAL_COLUMN /
+#   MATERIAL_BAND / MATERIAL_SILL / MATERIAL_LEDGE / MATERIAL_PARAPET /
+#   MATERIAL_PLINTH / MATERIAL_FLOOR constant in config.py:50-65. Eight of them MATCH
+#   today. The map is a deliberate, correct generator mapping that simply was never
+#   about the kit.
+#
+# CONSEQUENCE, measured: a kit-only rewrite that REPLACES this dict silently regresses
+# the generator - Shell_Corners 4->0, Shell_Bands 3->0, Shell_Sills 5->0, Shell_Ledges
+# 3->0, Shell_Parapet 6->0, Shell_Plinth 5->0, Room_Floor 7->0 - and every parametric
+# building loses its corner, band, sill, ledge, parapet and plinth texturing in one
+# commit, with no error and no warning. ANY KIT VOCABULARY MUST BE ADDED **ABOVE**
+# THESE KEYS, NEVER INSTEAD OF THEM. Adding kit fragments above them was measured to
+# change nothing for the generator, so it is pure upside - but only in that order.
+#
+# THIS DICT IS A PRECEDENCE TABLE. Insertion order IS behaviour: first match wins. An
+# alphabetical sort or a linter tidy silently re-textures meshes, because "Wall" sorts
+# above "Win" and the five BfyWall_Win* panels would collapse from Window to Wall
+# while still MATCHING - so they would never appear in the guessed[] warning either.
+# Do not reorder without re-running the census.
+#
+# Widening the map for the kit is still a texturing decision, not a rename, and only
+# 2 of the 7 orderings it needs are settled by what Jermaine has approved. Left for
+# him rather than guessed at.
 _DEFAULT_ROW = 0
 
 
