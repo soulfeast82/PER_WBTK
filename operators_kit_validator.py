@@ -48,6 +48,9 @@ _BUILDIFY_TOKENS = ("WALL", "PILLAR", "TOPTRIM")
 _PIVOT_EPS = 1e-4
 _XFORM_EPS = 1e-6
 
+# UV spread below this in BOTH axes means every loop is effectively on one point.
+_UV_EPS = 1e-6
+
 
 def _is_buildify_module(name):
     upper = name.upper()
@@ -102,13 +105,16 @@ class OP_ValidateKit(bpy.types.Operator):
             notes.append("Y pivot %s" % ("centred" if y_mid
                                          else "back" if abs(min(ys)) <= _PIVOT_EPS else "other"))
 
+        # --- Contract 3: UVs. Tracked separately, see _check_uv. -------------------
+        uv = self._check_uv(obj)
+
         # --- PER standing checks --------------------------------------------------
         bm = bmesh.new()
         try:
             bm.from_mesh(obj.data)
             if not bm.faces:
                 fails.append("no faces")
-                return fails, notes
+                return fails, notes, uv
             open_edges = sum(1 for e in bm.edges if len(e.link_faces) != 2)
             if open_edges:
                 # Volume is arbitrary on an open shell, so do not judge it. Some kit
@@ -125,7 +131,34 @@ class OP_ValidateKit(bpy.types.Operator):
         finally:
             bm.free()
 
-        return fails, notes
+        return fails, notes, uv
+
+    def _check_uv(self, obj):
+        """Returns a problem string, or None if the mesh carries usable UVs.
+
+        Presence of a uv_layer is NOT the check. A mesh can carry a UVMap whose
+        every loop sits at the same coordinate - `from_pydata` and several mesh
+        builders produce exactly that - and it passes any layer-count test while
+        being just as untexturable as no UVs at all. So measure the SPREAD.
+
+        Split from the fail list on purpose: a UV gap is a real defect, but it is
+        currently a project-wide one, and folding 46 of them into the contract
+        failures would bury the pivot/normal/order checks this operator exists to
+        police. Counted and printed on its own line instead, so it cannot be
+        mistaken for clean the way it was before this check existed.
+        """
+        me = obj.data
+        if not me.uv_layers:
+            return "no UV layer"
+        layer = me.uv_layers.active or me.uv_layers[0]
+        if not layer.data:
+            return "UV layer '%s' has no loops" % layer.name
+        us = [d.uv[0] for d in layer.data]
+        vs = [d.uv[1] for d in layer.data]
+        if (max(us) - min(us)) < _UV_EPS and (max(vs) - min(vs)) < _UV_EPS:
+            return ("UV layer '%s' is DEGENERATE - all %d loops at (%.3f, %.3f). "
+                    "Untexturable; same as having none." % (layer.name, len(us), us[0], vs[0]))
+        return None
 
     def _check_pillar_order(self, objects):
         """Contract 4, per collection."""
@@ -167,13 +200,15 @@ class OP_ValidateKit(bpy.types.Operator):
             self.report({'WARNING'}, "No mesh objects to validate.")
             return {'CANCELLED'}
 
-        failures, notes = {}, {}
+        failures, notes, uv_bad = {}, {}, {}
         for obj in objects:
-            f, n = self._check_mesh(obj)
+            f, n, u = self._check_mesh(obj)
             if f:
                 failures[obj.name] = f
             if n:
                 notes[obj.name] = n
+            if u:
+                uv_bad[obj.name] = u
 
         kit_fails = self._check_pillar_order(objects) + self._check_one_module_size(objects)
 
@@ -184,14 +219,25 @@ class OP_ValidateKit(bpy.types.Operator):
                 print("          - %s" % f)
         for f in kit_fails:
             print("  FAIL  kit-level: %s" % f)
+        for name in sorted(uv_bad):
+            print("  UV    %s: %s" % (name, uv_bad[name]))
         for name in sorted(notes):
             print("  note  %s: %s" % (name, "; ".join(notes[name])))
         clean = len(objects) - len(failures)
-        print("  %d/%d clean, %d kit-level issue(s)" % (clean, len(objects), len(kit_fails)))
+        print("  %d/%d clean, %d kit-level issue(s), %d/%d WITHOUT USABLE UVs"
+              % (clean, len(objects), len(kit_fails), len(uv_bad), len(objects)))
         print("--- end ---\n")
 
         total = len(failures) + len(kit_fails)
         if not total:
+            # UVs are reported even on a contract-clean kit. Staying silent here is
+            # exactly how 46 untexturable meshes read as "44/44 clean" before.
+            if uv_bad:
+                self.report({'WARNING'},
+                            "Kit Validator: %d/%d clean on contract, but %d mesh(es) have NO "
+                            "USABLE UVs - untexturable. See Console."
+                            % (clean, len(objects), len(uv_bad)))
+                return {'FINISHED'}
             self.report({'INFO'}, "Kit Validator: %d/%d clean. Contract + standing checks pass."
                         % (clean, len(objects)))
             return {'FINISHED'}
@@ -210,8 +256,9 @@ class OP_ValidateKit(bpy.types.Operator):
                 col.label(text="Full report in Window > Toggle System Console.")
 
         context.window_manager.popup_menu(draw, title="Kit Validator", icon='CHECKMARK')
-        self.report({'WARNING'}, "Kit Validator: %d issue(s) across %d mesh(es). See Console."
-                    % (total, len(failures)))
+        self.report({'WARNING'}, "Kit Validator: %d issue(s) across %d mesh(es)%s. See Console."
+                    % (total, len(failures),
+                       ", plus %d without usable UVs" % len(uv_bad) if uv_bad else ""))
         return {'FINISHED'}
 
 
