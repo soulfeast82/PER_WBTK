@@ -66,6 +66,7 @@ from . import operators_scatter
 
 # Trim sheet UV generator
 from . import operators_trim_uv
+from . import operators_box_uv
 
 # Region DNA presets
 from . import region_dna
@@ -108,6 +109,7 @@ _classes_to_register = (
     *operators_live_preview._classes_to_register,
     *operators_scatter._classes_to_register,
     *operators_trim_uv._classes_to_register,
+    *operators_box_uv._classes_to_register,
     *operators_region_dna._classes_to_register,
     *operators_block_composer._classes_to_register,
     *operators_buildify._classes_to_register,
