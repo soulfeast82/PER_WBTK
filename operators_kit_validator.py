@@ -52,6 +52,45 @@ _XFORM_EPS = 1e-6
 _UV_EPS = 1e-6
 
 
+def _face_components(bm):
+    """Split a bmesh into edge-connected face groups.
+
+    The kit's meshes are assemblies - a catwalk is a deck plus five separate boxes -
+    and every watertightness question has to be asked of each piece on its own. Asking
+    it of the object is what let 9 inverted components pass as clean.
+    """
+    seen, out = set(), []
+    for f in bm.faces:
+        if f.index in seen:
+            continue
+        stack, comp = [f], []
+        seen.add(f.index)
+        while stack:
+            cf = stack.pop()
+            comp.append(cf)
+            for e in cf.edges:
+                for nf in e.link_faces:
+                    if nf.index not in seen:
+                        seen.add(nf.index)
+                        stack.append(nf)
+        out.append(comp)
+    return out
+
+
+def _component_signed_volume(faces):
+    """Signed volume of ONE component, via the divergence theorem over a fan.
+
+    Not bmesh.calc_volume: that operates on the whole bmesh, which is the bug this
+    replaces. Negative means the winding is inside-out.
+    """
+    total = 0.0
+    for f in faces:
+        vs = f.verts
+        for i in range(1, len(vs) - 1):
+            total += vs[0].co.dot(vs[i].co.cross(vs[i + 1].co)) / 6.0
+    return total
+
+
 def _is_buildify_module(name):
     upper = name.upper()
     return any(t in upper for t in _BUILDIFY_TOKENS)
@@ -115,19 +154,41 @@ class OP_ValidateKit(bpy.types.Operator):
             if not bm.faces:
                 fails.append("no faces")
                 return fails, notes, uv
-            open_edges = sum(1 for e in bm.edges if len(e.link_faces) != 2)
-            if open_edges:
-                # Volume is arbitrary on an open shell, so do not judge it. Some kit
-                # pieces are open by design (a cable segment is a tube with cut ends).
-                notes.append("OPEN shell (%d edge(s) with a face count != 2) - "
-                             "signed volume not judged" % open_edges)
-            else:
-                volume = bm.calc_volume(signed=True)
-                # THE check. Watertight, unsigned volume, dimensions and a clean UE
-                # import will all pass on an inside-out mesh; only this catches it.
+            # PER COMPONENT, and the two reasons why are both defects this check
+            # shipped with on 2026-08-24. Fixed 2026-08-28 after a component-level
+            # audit found 9 inverted components in 3 meshes that this reported CLEAN.
+            #
+            #   1. It summed open edges over the WHOLE OBJECT and skipped the volume
+            #      check entirely if any existed. CatwalkSpan, GratingChannel and
+            #      GratingWalkway each carry ONE open single-quad grating card = 4
+            #      boundary edges, which switched off "the only check that catches
+            #      inverted normals" on exactly the three meshes that needed it -- and
+            #      they are 3 of the 8 meshes carrying the reference tiling unwrap.
+            #   2. bm.calc_volume(signed=True) SUMS every component, so a few small
+            #      inverted boxes hide inside one large correct one and the total
+            #      stays positive. Measured kit-wide: 260 closed components, 9
+            #      negative, and the object totals never revealed it.
+            #
+            # An open component is still not judged -- volume genuinely is arbitrary
+            # on an open shell, and some kit pieces are open by design. But an open
+            # component no longer excuses its closed neighbours.
+            open_comps = closed_comps = 0
+            for comp in _face_components(bm):
+                edges = set()
+                for f in comp:
+                    edges.update(f.edges)
+                if not all(len(e.link_faces) == 2 for e in edges):
+                    open_comps += 1
+                    continue
+                closed_comps += 1
+                volume = _component_signed_volume(comp)
                 if volume <= 0.0:
-                    fails.append("signed volume NOT POSITIVE (%+.4f) - normals are INVERTED. "
-                                 "Fix with bmesh.ops.recalc_face_normals" % volume)
+                    fails.append("closed component #%d (%d faces) has signed volume NOT "
+                                 "POSITIVE (%+.6f) - normals are INVERTED. Fix with "
+                                 "bmesh.ops.recalc_face_normals" % (closed_comps, len(comp), volume))
+            if open_comps:
+                notes.append("%d open component(s) - not volume-judged; %d closed one(s) were"
+                             % (open_comps, closed_comps))
         finally:
             bm.free()
 
