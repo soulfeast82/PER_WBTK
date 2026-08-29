@@ -48,12 +48,33 @@ _NAME_TO_ROW = {
 }
 
 
+# Where an unmatched name lands. Named rather than buried in a `return 0`, because
+# it is not a lookup result - it is a guess, and callers must be able to tell the
+# difference. Measured 2026-08-28 against PER_DW_Kit: of 54 meshes, 14 matched a
+# fragment and 40 did NOT, so the guess was the majority answer while reporting
+# success. Antennas, tanks, cables, barriers and railings were all being told they
+# were wall.
+#
+# The keys are also stale against the kit's vocabulary: "Walls" is plural but every
+# kit mesh reads `SM_DW_Wall_...`, "Column"/"Corner" never match `Pillar`, "Bands"/
+# "Ledge" never match `TopTrim`, "Floor"/"Slab" never match `Grating`/`Landing`/
+# `Stair`, and "Window" never matches the `_Win` abbreviation. Widening the map is a
+# texturing decision, not a rename, so it is left for Jermaine rather than guessed at.
+_DEFAULT_ROW = 0
+
+
 def _get_trim_row(obj_name):
-    """Determine which trim row an object belongs to based on its name."""
+    """Which trim row this name maps to, or None if nothing matched.
+
+    Returns None rather than defaulting, so a caller that wants the old behaviour
+    has to write `_DEFAULT_ROW` and thereby say so. Behaviour is unchanged at both
+    call sites - the parametric generator's children do not match either, so the
+    default is load-bearing there and is deliberately preserved.
+    """
     for fragment, row in _NAME_TO_ROW.items():
         if fragment.lower() in obj_name.lower():
             return row
-    return 0  # Default to wall row
+    return None
 
 
 def _apply_trim_uvs(obj, row_index, texel_density):
@@ -156,17 +177,34 @@ class WBTK_OT_apply_trim_uvs(bpy.types.Operator):
         master = context.active_object
         texel_density = getattr(scene, 'wbtk_trim_texel_density', 1.0)
 
-        count = 0
+        count, guessed = 0, []
         for child in master.children:
             if child.type != 'MESH':
                 continue
             row = _get_trim_row(child.name)
+            if row is None:
+                row = _DEFAULT_ROW
+                guessed.append(child.name)
             if _apply_trim_uvs(child, row, texel_density):
                 count += 1
 
         if count == 0:
             self.report({'WARNING'}, "No mesh children found to UV-remap.")
             return {'CANCELLED'}
+
+        if guessed:
+            print("\n--- Trim UVs: %d of %d names matched no trim row ---" % (len(guessed), count))
+            for n in guessed:
+                print("      %-46s -> row %d (%s) BY DEFAULT, not by match"
+                      % (n, _DEFAULT_ROW, TRIM_ROWS[_DEFAULT_ROW][2]))
+            print("--- end ---\n")
+            # WARNING, not INFO. Silently calling an antenna a wall is how this
+            # went unnoticed; the operator still succeeds, but it says what it guessed.
+            self.report({'WARNING'},
+                        "Trim UVs applied to %d objects - but %d matched NO trim row and were "
+                        "mapped to '%s' by default. See Console."
+                        % (count, len(guessed), TRIM_ROWS[_DEFAULT_ROW][2]))
+            return {'FINISHED'}
 
         self.report({'INFO'}, f"Trim UVs applied to {count} objects.")
         return {'FINISHED'}
@@ -182,6 +220,8 @@ def auto_apply_trim_uvs(master_empty, texel_density=1.0):
         if child.type != 'MESH':
             continue
         row = _get_trim_row(child.name)
+        if row is None:
+            row = _DEFAULT_ROW      # same guess as before, now written down
         _apply_trim_uvs(child, row, texel_density)
 
 
