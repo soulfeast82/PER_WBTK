@@ -35,7 +35,8 @@ DEFAULT_LAYER = "UVMap"        # what the 8 reference meshes call it
 _AXIS_MAP = {0: (1, 2), 1: (0, 2), 2: (0, 1)}
 
 
-def box_project(obj, divisor=DEFAULT_DIVISOR, layer_name=DEFAULT_LAYER, overwrite=False):
+def box_project(obj, divisor=DEFAULT_DIVISOR, layer_name=DEFAULT_LAYER, overwrite=False,
+                slot_indices=None):
     """Apply the ruled projection to one mesh object.
 
     Returns (changed, message). Never raises on ordinary refusals -- callers get a
@@ -45,6 +46,25 @@ def box_project(obj, divisor=DEFAULT_DIVISOR, layer_name=DEFAULT_LAYER, overwrit
     `bm.loops.layers.uv.active` and writes into it, which silently destroys the
     reference unwrap on any mesh that already has one. This refuses instead, and
     the refusal is reported rather than swallowed.
+
+    slot_indices restricts the projection to faces in those material slots, for the
+    MIXED meshes: a BfyWall panel whose wall field tiles but whose pane is a UE
+    masked cutout wanting a fitted 0-1 unwrap. Projecting the whole object would put
+    tiling UVs on the pane, which is wrong rather than merely unhelpful; skipping the
+    whole object leaves the wall field unwrapped, which is what the first pass did.
+
+    Faces OUTSIDE the filter are not written. What they then contain is NOT (0,0) --
+    measured in Blender 5.1, `uv_layers.new()` gives every face a UNIT SQUARE
+    (0,0)(1,0)(1,1)(0,1) on a mesh with no existing layer, and COPIES THE ACTIVE
+    LAYER on a mesh that has one. Both are traps if you assume zeros: the second in
+    particular means calling this twice with different filters leaves the first
+    call's projection sitting under the second's untouched faces.
+
+    The unit square is a serviceable placeholder for a masked cutout -- a pane quad
+    mapped 0-1 samples the whole mask -- but it is a default, not a decision, and the
+    face still wants a real fitted unwrap. The mesh reads as non-conforming to the
+    validator until it gets one, which is TRUE and is the point: a partial unwrap
+    that reported clean would be the more dangerous outcome.
     """
     if obj is None or obj.type != 'MESH':
         return False, "not a mesh"
@@ -59,11 +79,27 @@ def box_project(obj, divisor=DEFAULT_DIVISOR, layer_name=DEFAULT_LAYER, overwrit
         return False, ("already has '%s' - refusing to overwrite (pass overwrite=True "
                        "only if you mean to replace a reference unwrap)" % layer_name)
 
+    if slot_indices is not None:
+        want = set(slot_indices)
+        if not want:
+            return False, "empty slot filter - nothing to project"
+        avail = set(range(max(1, len(obj.material_slots))))
+        unknown = want - avail
+        if unknown:
+            return False, ("slot(s) %s do not exist on this mesh (has %d)"
+                           % (sorted(unknown), len(obj.material_slots)))
+    else:
+        want = None
+
     lay = existing if existing is not None else me.uv_layers.new(name=layer_name)
     data = lay.data
     verts = me.vertices
+    touched = 0
 
     for poly in me.polygons:
+        if want is not None and poly.material_index not in want:
+            continue
+        touched += 1
         n = poly.normal
         # First-max on ties, matching the derivation. A 45-degree face is arbitrary
         # either way; what matters is that it is deterministic and documented.
@@ -74,7 +110,12 @@ def box_project(obj, divisor=DEFAULT_DIVISOR, layer_name=DEFAULT_LAYER, overwrit
             data[li].uv = (co[ui] / divisor, co[vi] / divisor)
 
     me.update()
-    return True, "%d faces projected at 1/%.4g" % (len(me.polygons), divisor)
+    if want is not None:
+        return True, ("%d of %d faces projected at 1/%.4g (slots %s); the other %d LEFT AS FOUND "
+                      "and still need a fitted unwrap"
+                      % (touched, len(me.polygons), divisor, sorted(want),
+                         len(me.polygons) - touched))
+    return True, "%d faces projected at 1/%.4g" % (touched, divisor)
 
 
 class WBTK_OT_BoxProjectUVs(bpy.types.Operator):
@@ -105,6 +146,13 @@ class WBTK_OT_BoxProjectUVs(bpy.types.Operator):
         name="Selected only", default=True,
         description="Off = every mesh object in the scene",
     )
+    only_slots: bpy.props.StringProperty(
+        name="Only slots",
+        default="",
+        description="Blank = every face. Otherwise a comma-separated list of material slot "
+                    "indices, e.g. '0'. Faces outside it are left untouched - for a mesh whose "
+                    "wall field tiles but whose pane needs a fitted 0-1 unwrap",
+    )
 
     @classmethod
     def poll(cls, context):
@@ -122,9 +170,18 @@ class WBTK_OT_BoxProjectUVs(bpy.types.Operator):
             self.report({'WARNING'}, "No mesh objects in the %s." % scope)
             return {'CANCELLED'}
 
+        slot_filter = None
+        if self.only_slots.strip():
+            try:
+                slot_filter = [int(x) for x in self.only_slots.replace(" ", "").split(",") if x]
+            except ValueError:
+                self.report({'ERROR'}, "Only slots must be comma-separated integers, e.g. '0,2'.")
+                return {'CANCELLED'}
+
         done, skipped = [], []
         for ob in targets:
-            changed, msg = box_project(ob, self.divisor, self.layer_name, self.overwrite)
+            changed, msg = box_project(ob, self.divisor, self.layer_name, self.overwrite,
+                                       slot_filter)
             (done if changed else skipped).append((ob.name, msg))
 
         print("")
