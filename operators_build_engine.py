@@ -128,6 +128,22 @@ def _addon_dir():
     return os.path.dirname(os.path.realpath(__file__))
 
 
+# Meshes Summon must never build on. Build Mode blocks, the grid, detail stamps
+# and the live-preview mesh are WBTK's own scaffolding; SM_DW_* are the kit
+# modules themselves. All of them are meshes, so `type == 'MESH'` alone accepts
+# them - which is how a Summon landed on WBTK_BM_0001 on 2026-09-05: 26 instances
+# on a helper block and three kit modules dragged off the origin.
+# WBTK_BFY_ is deliberately NOT here: the footprint is the intended target.
+_NEVER_TARGET_PREFIXES = ("WBTK_BM_", "WBTK_DTL_", "_WBTK_", "WBTK_Live_Preview", "SM_DW_")
+
+
+def _is_summon_target(obj):
+    """A mesh that is neither WBTK scaffolding nor a kit module."""
+    if obj is None or obj.type != 'MESH':
+        return False
+    return not obj.name.startswith(_NEVER_TARGET_PREFIXES)
+
+
 def _get_or_make_collection(name, host):
     coll = bpy.data.collections.get(name)
     if coll is None:
@@ -137,6 +153,26 @@ def _get_or_make_collection(name, host):
             host.children.link(coll)
         except RuntimeError:
             pass  # already parented somewhere; harmless
+    if host is not None and coll.name in host.children:
+        # The host is the ONE parent. Appending the `building` node group drags
+        # Buildify's own collections in through its socket defaults, linked at the
+        # scene root - measured 2026-09-05: eleven root-level collections after
+        # one Summon, every module rendered loose beside the building as well as
+        # hidden under the host. Unlink only once the host link is confirmed, so a
+        # collection is never left with no parent at all (a parentless collection
+        # is outside the depsgraph and Collection Info reads it as empty).
+        for scene in bpy.data.scenes:
+            if coll.name in scene.collection.children:
+                try:
+                    scene.collection.children.unlink(coll)
+                except RuntimeError:
+                    pass  # linked-library scene; leave it
+        for other in bpy.data.collections:
+            if other is not host and coll.name in other.children:
+                try:
+                    other.children.unlink(coll)
+                except RuntimeError:
+                    pass  # linked-library collection; leave it
     return coll
 
 
@@ -239,16 +275,19 @@ class OP_SummonBuildEngine(bpy.types.Operator):
             report.append("could not identify: %s" % ", ".join(unbound))
 
     def execute(self, context):
+        from .operators_buildify import FOOTPRINT_NAME
         target = context.active_object
-        if target is None or target.type != 'MESH':
-            from .operators_buildify import FOOTPRINT_NAME
-            target = bpy.data.objects.get(FOOTPRINT_NAME)
-            if target is not None and target.type == 'MESH':
-                self.report({'INFO'}, "No mesh active - using '%s'." % FOOTPRINT_NAME)
-        if target is None or target.type != 'MESH':
-            self.report({'ERROR'}, "Select the footprint mesh first "
-                                   "(run 'Export Footprints for Buildify' if you have none).")
-            return {'CANCELLED'}
+        if not _is_summon_target(target):
+            footprint = bpy.data.objects.get(FOOTPRINT_NAME)
+            if _is_summon_target(footprint):
+                why = ("No usable mesh active" if target is None or target.type != 'MESH'
+                       else "'%s' is WBTK scaffolding or a kit module, not a footprint" % target.name)
+                self.report({'INFO'}, "%s - using '%s'." % (why, FOOTPRINT_NAME))
+                target = footprint
+            else:
+                self.report({'ERROR'}, "Select the footprint mesh first "
+                                       "(run 'Export Footprints for Buildify' if you have none).")
+                return {'CANCELLED'}
 
         report = []
         ng = self._append_node_group(report)
