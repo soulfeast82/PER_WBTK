@@ -828,15 +828,18 @@ class WBTK_PT_UEPipeline(WBTK_PanelBase):
         box_scale = layout.box()
         box_scale.label(text="Scene Scale", icon='DRIVER_DISTANCE')
         current_scale = context.scene.unit_settings.scale_length
-        is_correct = abs(current_scale - 0.01) < 0.0001
+        # WBTK authors 1 BU = 1 m and both FBX exporters use FBX_SCALE_NONE, which
+        # multiplies by 100 * scale_length: at 1.0 a 3.5 m storey lands in UE as
+        # 350 cm; at 0.01 it lands as 3.5 cm and every (m) field shows cm.
+        is_correct = abs(current_scale - 1.0) < 0.0001
 
         row = box_scale.row()
         if is_correct:
-            row.label(text=f"Scale: {current_scale:.4f} ✓ Ready for UE", icon='CHECKMARK')
+            row.label(text=f"Scale: {current_scale:.4f} ✓ metres — WBTK exports at UE cm", icon='CHECKMARK')
         else:
-            row.label(text=f"Scale: {current_scale:.4f} ✗ Needs fix!", icon='ERROR')
+            row.label(text=f"Scale: {current_scale:.4f} ✗ WBTK exports will be {100*current_scale:.0f}% size", icon='ERROR')
 
-        op_scale = box_scale.operator("wbtk.check_ue_scale", text="Fix Scale to 0.01", icon='DRIVER_DISTANCE')
+        op_scale = box_scale.operator("wbtk.check_ue_scale", text="Reset Scale to 1.0 (metres)", icon='DRIVER_DISTANCE')
         op_scale.fix_scale = True
 
         layout.separator()

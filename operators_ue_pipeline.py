@@ -30,22 +30,26 @@ class WBTK_OT_CheckUEScale(bpy.types.Operator):
     def execute(self, context):
         scene = context.scene
         current_scale = scene.unit_settings.scale_length
-        target_scale = Config.UE_UNIT_SCALE  # 0.01
+        # 1.0 (metres). WBTK geometry is authored 1 BU = 1 m and its FBX exporters
+        # convert to UE centimetres themselves (FBX_SCALE_NONE = x100 at scale 1.0).
+        # 0.01 would export everything at 1/100 size and flip every length field
+        # in the sidebar to centimetres.
+        target_scale = 1.0
 
         if abs(current_scale - target_scale) < 0.0001:
-            self.report({'INFO'}, "Scene scale is already correct (0.01) — ready for Unreal export.")
+            self.report({'INFO'}, "Scene scale is 1.0 (metres) — WBTK exports land in UE at centimetre scale.")
             return {'FINISHED'}
 
         if self.fix_scale:
             scene.unit_settings.system = 'METRIC'
             scene.unit_settings.scale_length = target_scale
             self.report({'INFO'},
-                f"Scene scale fixed: {current_scale:.4f} → {target_scale} (Metric). "
-                "Xavier150 addon will now export at correct UE scale."
+                f"Scene scale reset: {current_scale:.4f} → {target_scale} (Metric, metres). "
+                "WBTK's Realize + Export and Export FBX now land at the right size in UE."
             )
         else:
             self.report({'WARNING'},
-                f"Scene scale is {current_scale:.4f} — should be {target_scale} for Unreal. "
+                f"Scene scale is {current_scale:.4f} — should be {target_scale} for WBTK's exporters. "
                 "Run again with Fix Scale enabled."
             )
 
@@ -379,6 +383,7 @@ def _harvest(obj, depsgraph, name):
     geometry whenever two modules carry different materials in the same slot.
     """
     verts, faces, mats = [], [], []
+    uvs, smooth = [], []          # per loop (flat u,v pairs) / per polygon
     kinds, no_uv = {}, set()
     count = 0
 
@@ -395,7 +400,8 @@ def _harvest(obj, depsgraph, name):
         count += 1
         oname = src.original.name if src.original else src.name
         kinds[oname] = kinds.get(oname, 0) + 1
-        if not me.uv_layers:
+        uv_layer = me.uv_layers.active or (me.uv_layers[0] if me.uv_layers else None)
+        if uv_layer is None:
             no_uv.add(oname)
 
         mtx = inst.matrix_world.copy()
@@ -405,6 +411,14 @@ def _harvest(obj, depsgraph, name):
         for poly in me.polygons:
             faces.append(tuple(i + base for i in poly.vertices))
             mats.append(slots[poly.material_index] if poly.material_index < len(slots) else None)
+            smooth.append(poly.use_smooth)
+            # from_pydata emits loops in the order the face tuple lists its
+            # verts, which is poly.loop_indices order here.
+            if uv_layer is not None:
+                for li in poly.loop_indices:
+                    uvs.extend(uv_layer.data[li].uv)
+            else:
+                uvs.extend((0.0, 0.0) * len(poly.vertices))
 
     if not count:
         return None, [], 0, {}, []
@@ -416,6 +430,13 @@ def _harvest(obj, depsgraph, name):
 
     out = bpy.data.meshes.new(name + "_Mesh")
     out.from_pydata(verts, [], faces)
+    if len(out.polygons) == len(faces):
+        # validate() can drop degenerate faces, which would misalign per-loop data;
+        # only write UVs/smooth when the face count survived intact.
+        if len(out.loops) * 2 == len(uvs):
+            layer = out.uv_layers.new(name="UVMap")
+            layer.data.foreach_set("uv", uvs)
+        out.polygons.foreach_set("use_smooth", smooth)
     out.validate(verbose=False)
     for n in ordered:
         m = bpy.data.materials.get(n)
