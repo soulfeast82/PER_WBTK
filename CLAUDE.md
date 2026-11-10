@@ -222,6 +222,20 @@ separately. Worth designing deliberately in v1.1.
 
 ## Strategic Pivot (locked 2026-07-06) — WBTK is the BRAIN, not the building engine
 
+> ⛔ **SUPERSEDED 2026-11-06 — Jermaine: "Replace the pivot with the two homes."**
+> The section below is kept as the record of the July plan. The ruling that replaces it:
+> **WBTK has two homes.** In Blender, Build Mode makes kit pieces (slabs, about one bay by one
+> storey, plus one-off landmarks modelled whole) and stamps their joints (`SOCKET_` empties).
+> In Unreal, a WBTK editor tool (does not exist yet) assembles them: stretch a wall type along
+> one floor, drag up for floors (ground floor becomes the shop row once the count passes 1,
+> a stairwell strip is pointed at afterward), draw walkways between placed buildings, drop
+> pipes and signs on real and made spots, stop and ask when a wall runs out. Region DNA swaps
+> kits per district. **Buildify is no longer the building engine**; BagaPie's role is not
+> re-ruled. Full talk: `WBTK_TALK_NOTES.md` part 7. No build has been asked for; the first
+> build, when asked, is a "Slab v0" bridge proof, specced by Cowork first.
+> The Evolution Clause below falls with the pivot.
+
+
 Two third-party GN tools own generation duties:
 
 - **Buildify 1.0** = the building engine. Verified working on Blender 5.1
