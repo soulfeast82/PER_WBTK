@@ -233,6 +233,7 @@ class WBTK_OT_PreviewPlace(bpy.types.Operator):
             return
 
         bpy.ops.object.select_all(action='DESELECT')
+        before = {o.name for o in bpy.data.objects}
 
         try:
             # Parse "wbtk.generate_tree" → getattr(bpy.ops.wbtk, "generate_tree")
@@ -244,7 +245,16 @@ class WBTK_OT_PreviewPlace(bpy.types.Operator):
             self.report({'ERROR'}, f"Generation failed: {e}")
             return
 
-        for obj in list(context.selected_objects):
+        # Move what the generator CREATED. The generators build at the origin and
+        # select nothing (bm_to_obj restores the empty selection), so relying on
+        # context.selected_objects moved nothing and every placement landed at
+        # (0,0,0). Only top-level new objects are moved: a new child of a new
+        # master follows its parent and must not be offset a second time.
+        new_objs = [o for o in bpy.data.objects if o.name not in before]
+        roots = [o for o in new_objs if o.parent is None or o.parent.name in before]
+        if not roots:
+            roots = list(context.selected_objects)
+        for obj in roots:
             obj.location = obj.location + position
 
         label = entry['label']

@@ -157,7 +157,10 @@ class GeometryWalkways:
         elif axis == 'Z': offset = Vector((0, 0, length))
         else: print(f"Error: Invalid axis '{axis}'."); return None
 
-        return GeometryWalkways._add_profile_beam_internal(bm, profile_verts, base_pos, offset)
+        # The profile lives in the XY plane. Extruding it along X or Y keeps it
+        # IN that plane (a zero-thickness ribbon); the angled helper builds an
+        # orthonormal basis so the profile is perpendicular to the run.
+        return GeometryWalkways._add_profile_beam_angled_internal(bm, profile_verts, Vector(base_pos), offset)
 
     @staticmethod
     def add_beam_angled(bm, point1, point2, rail_style='ROUND', radius=None):

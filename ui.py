@@ -1106,6 +1106,10 @@ class WBTK_PT_FaceMagnet(WBTK_PanelBase):
         row = box.row()
         row.scale_y = 1.5
         op = row.operator("wbtk.face_magnet", text="FACE MAGNET", icon='SNAP_FACE')
+        # The operator reads its OWN properties; without these two lines the
+        # panel controls above are decorative.
+        op.offset = getattr(scene, 'wbtk_fm_offset', 0.0)
+        op.align_to_normal = getattr(scene, 'wbtk_fm_align_normal', True)
 
 
 

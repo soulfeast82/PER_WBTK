@@ -329,8 +329,10 @@ def place_detail(block_obj, face, detail_type, offset_x=0.5, offset_z=0.5, scale
         'scale': scale,
     })
 
-    # Parent to block
+    # Parent to block. The location above is WORLD space, so cancel the
+    # parent's transform or the stamp lands at twice the block's offset.
     obj.parent = block_obj
+    obj.matrix_parent_inverse = block_obj.matrix_world.inverted()
 
     col.objects.link(obj)
     return obj
