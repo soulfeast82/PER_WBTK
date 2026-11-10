@@ -192,7 +192,7 @@ class WBTK_OT_LivePreviewToggle(bpy.types.Operator):
     """Toggle live preview for a generator — wireframe updates as you change sliders"""
     bl_idname  = "wbtk.live_preview_toggle"
     bl_label   = "Toggle Live Preview"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'REGISTER'}   # no UNDO: undoing a toggle desyncs the timer from the scene props
 
     generator_type: bpy.props.StringProperty(
         name="Generator Type", default="BUILDING")
@@ -267,6 +267,19 @@ def cleanup():
     """Call from addon unregister to clean up timer and preview object."""
     _stop_timer()
     _delete_live_preview()
+
+
+from bpy.app.handlers import persistent as _persistent
+
+
+@_persistent
+def on_load_post(*_args):
+    """Loading a .blend drops non-persistent timers; drop our state with them.
+    (*_args: handler signatures vary across Blender versions.)"""
+    _live_state['active'] = False
+    _live_state['type'] = ''
+    _live_state['last_hash'] = ''
+    _live_state['timer_running'] = False
 
 
 # ─────────────────────────────────────────────────────────────────────────────

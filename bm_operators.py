@@ -88,7 +88,17 @@ class OP_ToggleMode(bpy.types.Operator):
         if not getattr(context.scene, 'wbtk_bm_active', False):
             return {'FINISHED'}
 
-        if event.value != 'PRESS' or event.ctrl or event.alt:
+        if event.value != 'PRESS' or event.ctrl or event.alt or event.shift or event.oskey:
+            return {'PASS_THROUGH'}
+
+        if event.type == 'ESC':
+            # keyboard exit — mirrors the panel's Exit button
+            bpy.ops.wbtk.bm_toggle_mode()
+            return {'FINISHED'}
+
+        if not _mouse_over_view3d(context, event):
+            # A window-level modal sees every keypress in every editor. Only
+            # claim the letters while the mouse is over a 3D Viewport.
             return {'PASS_THROUGH'}
 
         key = event.type
@@ -118,6 +128,23 @@ class OP_ToggleMode(bpy.types.Operator):
         else:
             return {'PASS_THROUGH'}
         return {'RUNNING_MODAL'}
+
+
+def _mouse_over_view3d(context, event):
+    """True when the mouse is inside the main region of any 3D Viewport."""
+    x, y = event.mouse_x, event.mouse_y
+    screen = context.screen
+    if screen is None:
+        return False
+    for area in screen.areas:
+        if area.type != 'VIEW_3D':
+            continue
+        for region in area.regions:
+            if region.type != 'WINDOW':
+                continue
+            if region.x <= x < region.x + region.width and region.y <= y < region.y + region.height:
+                return True
+    return False
 
 
 def _deferred_sync(scene):

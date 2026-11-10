@@ -166,6 +166,10 @@ def register():
         except Exception as e:
             print(f"ERROR: Failed to register class '{cls.__name__}': {e}")
 
+    # 3. Load handler: reset live-preview module state when a file is loaded
+    if operators_live_preview.on_load_post not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(operators_live_preview.on_load_post)
+
     print(f"{bl_info['name']} Registered.")
 
 def unregister():
@@ -177,6 +181,11 @@ def unregister():
         operators_live_preview.cleanup()
     except Exception as e:
         print(f"Warning: Live preview cleanup failed: {e}")
+    try:
+        if operators_live_preview.on_load_post in bpy.app.handlers.load_post:
+            bpy.app.handlers.load_post.remove(operators_live_preview.on_load_post)
+    except Exception as e:
+        print(f"Warning: load_post handler removal failed: {e}")
 
     # 1. Unregister Operator and Panel classes (in reverse order)
     for cls in reversed(_classes_to_register):
