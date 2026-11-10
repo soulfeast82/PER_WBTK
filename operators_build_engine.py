@@ -128,6 +128,23 @@ def _addon_dir():
     return os.path.dirname(os.path.realpath(__file__))
 
 
+def _set_modifier_input(mod, identifier, value):
+    """Set one input of a Geometry Nodes modifier, on Blender 5.1 and 5.2.
+
+    Blender 5.2 took the inputs off the modifier's ID properties: mod[identifier]
+    raises "id properties not supported for this type" for every input. They live
+    at mod.properties.inputs.<identifier>.value now. 5.1 and older only have the
+    mod[identifier] form. Measured on 5.2.2 LTS, 2026-11-10.
+    """
+    props = getattr(mod, "properties", None)
+    inputs = getattr(props, "inputs", None) if props is not None else None
+    sock = getattr(inputs, identifier, None) if inputs is not None else None
+    if sock is not None and hasattr(sock, "value"):
+        sock.value = value
+    else:
+        mod[identifier] = value
+
+
 # Meshes Summon must never build on. Build Mode blocks, the grid, detail stamps
 # and the live-preview mesh are WBTK's own scaffolding; SM_DW_* are the kit
 # modules themselves. All of them are meshes, so `type == 'MESH'` alone accepts
@@ -323,11 +340,11 @@ class OP_SummonBuildEngine(bpy.types.Operator):
             if getattr(item, "in_out", None) != 'INPUT':
                 continue
             if item.name == "Module width":
-                mod[item.identifier] = _MODULE_WIDTH
+                _set_modifier_input(mod, item.identifier, _MODULE_WIDTH)
             elif item.name == "Module height":
-                mod[item.identifier] = _MODULE_HEIGHT
+                _set_modifier_input(mod, item.identifier, _MODULE_HEIGHT)
             elif item.name.strip().startswith("- Randomize floor numbers"):
-                mod[item.identifier] = False
+                _set_modifier_input(mod, item.identifier, False)
         report.append("module %.1f x %.1f m, floor randomising off" % (_MODULE_WIDTH, _MODULE_HEIGHT))
 
         target.update_tag()

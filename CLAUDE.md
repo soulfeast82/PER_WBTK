@@ -391,6 +391,16 @@ SIGN_MOUNT, ANTENNA, CANOPY.
   installed copy caused the 2026-07-07 stale-smoke-test incident and is
   the likely mechanism that lost the 4a/4b/5a work. Never reinstall from
   zip over the junction.)
+  **2026-11-10:** Blender 5.1 is no longer installed; **5.2 is the live Blender**
+  and now has the same junction (`...\Blender\5.2\scripts\addons\PER_WBTK` ->
+  this folder). Its old plain copy is kept at `...\5.2\scripts\PER_WBTK_copy_backup`
+  (outside `addons`, so Blender doesn't list it). A plain copy breaks Summon:
+  Buildify and the kit are found relative to the real folder.
+  **Blender 5.2 API break:** Geometry Nodes modifier inputs are no longer ID
+  properties. `mod["Socket_N"] = v` raises "id properties not supported for this
+  type"; use `mod.properties.inputs.Socket_N.value`. `_set_modifier_input` in
+  `operators_build_engine.py` does both. `tests/test_buildify_export.py` still
+  uses the old form, so it runs on 5.1 only until ported.
 
 ---
 
