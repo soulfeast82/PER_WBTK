@@ -204,8 +204,12 @@ REGION_PRESETS = {
         },
     },
 
+    # 'EOSRIA' is a STORED ENUM ID (scene.wbtk_region_dna is saved in every .blend). Renaming it would
+    # break saved scenes, so the ID stays and only the display text follows canon -- same rule as
+    # 'NEO_VESPER' above. Eosria is dead (geography card v1.3): this preset is The Keshara Isles /
+    # its capital Amanira, whose ornate Radiant Covenant architecture the props below describe. 2026-09-25.
     'EOSRIA': {
-        'label': "Eosria Expanse (Radiant Circle)",
+        'label': "The Keshara Isles (Amanira)",
         'description': "Divine, ornate, bright — tall arched openings, decorative trim, grand scale.",
         'props': {
             'wbtk_building_width': 5,
@@ -300,6 +304,6 @@ REGION_ENUM_ITEMS = [
     ('NEO_VESPER',  "Neo Vespyr",        REGION_PRESETS['NEO_VESPER']['description']),
     ('SANGRE_NEON', "Sangre Neón",       REGION_PRESETS['SANGRE_NEON']['description']),
     ('VJOLDRHEIM',  "Vjoldrheim",        REGION_PRESETS['VJOLDRHEIM']['description']),
-    ('EOSRIA',      "Eosria Expanse",    REGION_PRESETS['EOSRIA']['description']),
+    ('EOSRIA',      "The Keshara Isles", REGION_PRESETS['EOSRIA']['description']),  # ID kept: stored enum
     ('UNDERTIDE',   "Undertide",         REGION_PRESETS['UNDERTIDE']['description']),
 ]
