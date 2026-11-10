@@ -70,7 +70,8 @@ class OP_GenerateCityBlock(bpy.types.Operator):
             while cursor + min_bldg_w * tile < available:
                 # Pick random building width
                 remaining_tiles = int((available - cursor) / tile)
-                bw_tiles = rng.randint(min_bldg_w, min(max_bldg_w, remaining_tiles))
+                hi_w = max(min_bldg_w, min(max_bldg_w, remaining_tiles))
+                bw_tiles = rng.randint(min_bldg_w, hi_w)
                 bw = bw_tiles * tile
 
                 # Don't create tiny leftover buildings
@@ -80,7 +81,7 @@ class OP_GenerateCityBlock(bpy.types.Operator):
                     bw_tiles = max(min_bldg_w, round(bw / tile))
 
                 # Random parameters
-                b_floors = rng.randint(min_floors, max_floors)
+                b_floors = rng.randint(min(min_floors, max_floors), max(min_floors, max_floors))
                 b_shape = rng.choice(shapes)
                 b_seed = seed + building_idx * 7
 

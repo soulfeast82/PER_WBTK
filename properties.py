@@ -39,8 +39,8 @@ class PropertyManager:
             items=[
                 ('NONE',        "— Select Region —", "Choose a region preset to apply"),
                 ('DUSK_WARD',   "Dusk Ward",         "Cyberpunk slums — cramped, decayed, neon-lit"),
-                ('NEO_VESPER',  "Neo Vesper",        "Corporate district — tall, clean, glass and steel"),
-                ('SANGRE_NEON', "Sangre Neon",       "Desert rust meets neon — weathered adobe and metal"),
+                ('NEO_VESPER',  "Neo Vespyr",        "Corporate district — tall, clean, glass and steel"),
+                ('SANGRE_NEON', "Sangre Neón",       "Desert rust meets neon — weathered adobe and metal"),
                 ('VJOLDRHEIM',  "Vjoldrheim",        "Ice and stone fortress — heavy, thick walls"),
                 ('EOSRIA',      "Eosria Expanse",    "Divine, ornate, bright — grand scale"),
                 ('UNDERTIDE',   "Undertide",         "Underground industrial — low, utilitarian"),
@@ -410,7 +410,7 @@ class PropertyManager:
             name="Bevel Width (m)", default=0.05, min=0.005, max=0.3, unit='LENGTH',
             description="Width of the edge bevel chamfer")),
         ('wbtk_building_bevel_segments', bpy.props.IntProperty(
-            name="Bevel Segments", default=2, min=1, max=6,
+            name="Bevel Segments", default=1, min=1, max=6,
             description="Smoothness of the bevel — 1 = hard chamfer, 3+ = rounded")),
 
         # Window configuration

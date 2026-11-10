@@ -329,10 +329,11 @@ class GeometryFoliage:
         v2 = bm.verts.new(position + right_rot * half + up_rot * half + droop_vec)
         v3 = bm.verts.new(position - right_rot * half + up_rot * half + droop_vec)
 
+        # Single-sided card. A reversed-winding "back face" cannot be added to the
+        # same four verts (faces.new raises 'face already exists'); two-sidedness
+        # belongs to the leaf MATERIAL (backface culling off / UE Two Sided).
         try:
             bm.faces.new((v0, v1, v2, v3))
-            # Back face for double-sided appearance
-            bm.faces.new((v0, v3, v2, v1))
         except ValueError:
             pass
 
@@ -618,8 +619,7 @@ class GeometryFoliage:
                     v2 = bm.verts.new(tip + perp * half_w * 0.3 + droop_offset)
                     v3 = bm.verts.new(tip - perp * half_w * 0.3 + droop_offset)
                     try:
-                        bm.faces.new((v0, v1, v2, v3))
-                        bm.faces.new((v0, v3, v2, v1))
+                        bm.faces.new((v0, v1, v2, v3))   # single-sided; see _add_leaf_card
                     except ValueError:
                         pass
 
@@ -647,8 +647,7 @@ class GeometryFoliage:
                 v2 = bm.verts.new(tip + perp * tip_w)
                 v3 = bm.verts.new(tip - perp * tip_w)
                 try:
-                    bm.faces.new((v0, v1, v2, v3))
-                    bm.faces.new((v0, v3, v2, v1))
+                    bm.faces.new((v0, v1, v2, v3))   # single-sided; see _add_leaf_card
                 except ValueError:
                     pass
 

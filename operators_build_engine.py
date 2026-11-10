@@ -241,6 +241,11 @@ class OP_SummonBuildEngine(bpy.types.Operator):
     def execute(self, context):
         target = context.active_object
         if target is None or target.type != 'MESH':
+            from .operators_buildify import FOOTPRINT_NAME
+            target = bpy.data.objects.get(FOOTPRINT_NAME)
+            if target is not None and target.type == 'MESH':
+                self.report({'INFO'}, "No mesh active - using '%s'." % FOOTPRINT_NAME)
+        if target is None or target.type != 'MESH':
             self.report({'ERROR'}, "Select the footprint mesh first "
                                    "(run 'Export Footprints for Buildify' if you have none).")
             return {'CANCELLED'}

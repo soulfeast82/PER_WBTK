@@ -122,11 +122,17 @@ class OP_ValidateKit(bpy.types.Operator):
                       "against Buildify's module contract and PER's standing checks")
     bl_options = {'REGISTER'}
 
+    # WBTK's own helpers are not kit pieces: the grid is edges-only ("no faces"),
+    # the blocks and footprint carry no UVs by design.
+    _HELPER_PREFIXES = ("WBTK_BM_", "WBTK_DTL_", "_WBTK_", "WBTK_BFY_", "WBTK_Live_Preview",
+                        "WBTK_Preview_Object")
+
     def _targets(self, context):
         sel = [o for o in context.selected_objects if o.type == 'MESH']
         if sel:
             return sel, "selection"
-        return [o for o in context.scene.objects if o.type == 'MESH'], "scene"
+        return [o for o in context.scene.objects
+                if o.type == 'MESH' and not o.name.startswith(self._HELPER_PREFIXES)], "scene"
 
     def _check_mesh(self, obj):
         """Returns (failures, notes) for one object."""

@@ -63,7 +63,7 @@ REGION_PRESETS = {
     },
 
     'NEO_VESPER': {
-        'label': "Neo Vesper",
+        'label': "Neo Vespyr",
         'description': "Corporate district — tall, clean, glass and steel. Wide footprints, lots of windows.",
         'props': {
             'wbtk_building_width': 6,
@@ -111,7 +111,7 @@ REGION_PRESETS = {
     },
 
     'SANGRE_NEON': {
-        'label': "Sangre Neon (Tierra Oxidada)",
+        'label': "Sangre Neón (Tierra Oxidada)",
         'description': "Desert rust meets neon — weathered adobe and metal, wide low buildings.",
         'props': {
             'wbtk_building_width': 4,
@@ -297,8 +297,8 @@ REGION_PRESETS = {
 REGION_ENUM_ITEMS = [
     ('NONE',        "— Select Region —", "Choose a region preset to apply"),
     ('DUSK_WARD',   "Dusk Ward",         REGION_PRESETS['DUSK_WARD']['description']),
-    ('NEO_VESPER',  "Neo Vesper",        REGION_PRESETS['NEO_VESPER']['description']),
-    ('SANGRE_NEON', "Sangre Neon",       REGION_PRESETS['SANGRE_NEON']['description']),
+    ('NEO_VESPER',  "Neo Vespyr",        REGION_PRESETS['NEO_VESPER']['description']),
+    ('SANGRE_NEON', "Sangre Neón",       REGION_PRESETS['SANGRE_NEON']['description']),
     ('VJOLDRHEIM',  "Vjoldrheim",        REGION_PRESETS['VJOLDRHEIM']['description']),
     ('EOSRIA',      "Eosria Expanse",    REGION_PRESETS['EOSRIA']['description']),
     ('UNDERTIDE',   "Undertide",         REGION_PRESETS['UNDERTIDE']['description']),

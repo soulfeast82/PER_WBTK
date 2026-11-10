@@ -4,7 +4,7 @@ bl_info = {
     "name": "World Builder Toolkit (WBTK)",
     "author": "Jermaine Dawson Peterson & AI Assistant",
     "version": (0, 13, 0),
-    "blender": (5, 0, 0),
+    "blender": (5, 1, 0),
     "location": "View3D > Sidebar > World Builder",
     "description": "Generate modular walkways, structures, props, fences, ground planes, and more.",
     "warning": "",
@@ -84,9 +84,7 @@ from . import operators_kit_validator
 # Engine Summon (QUEUED #4 / pivot #3)
 from . import operators_build_engine
 
-# Footprint Painter
-
-# Custom Builder (Viewport Block Painter)
+# Build Mode (PRIMARY authoring workflow): data / operators / generation / stamps
 from . import bm_data
 from . import bm_operators
 from . import bm_generate

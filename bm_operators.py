@@ -120,6 +120,7 @@ class OP_ToggleMode(bpy.types.Operator):
             if bm_data.get_selected(context):
                 context.window_manager.popup_menu(
                     WBTK_MT_BuildBlockMenu.draw_items, title="Build Block", icon='MOD_BUILD')
+                return {'RUNNING_MODAL'}   # consumed: no second (Object Context) menu on top
             return {'PASS_THROUGH'}
         elif key == 'LEFTMOUSE':
             # Delayed sync after selection

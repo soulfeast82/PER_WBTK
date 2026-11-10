@@ -89,7 +89,7 @@ def generate_full(scene):
         mod = wall_obj.modifiers.new(name="WBTK_EdgeBevel", type='BEVEL')
         mod.width = bevel_w; mod.segments = bevel_s
         mod.limit_method = 'ANGLE'; mod.angle_limit = math.radians(60)
-        mod.affect = 'EDGES'; mod.profile = 0.5; mod.miter_outer = 'MITER_ARC'
+        mod.affect = 'EDGES'; mod.profile = 0.5; mod.miter_outer = 'MITER_SHARP'   # art law: zero rounded corners
 
     use_trim = getattr(scene, 'wbtk_use_trim_uvs', False)
     if use_trim:

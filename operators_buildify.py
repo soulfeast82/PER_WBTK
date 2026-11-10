@@ -380,6 +380,16 @@ class OP_ExportBuildifyFootprints(bpy.types.Operator):
                 {'WARNING'},
                 "'%s' has a non-identity transform - the Buildify result will "
                 "be offset from the Build Mode blocks." % FOOTPRINT_NAME)
+        # Make the footprint the active object so Summon Build Engine can run
+        # next without a trip to the Outliner. Selection only; no data change.
+        if ob.name in context.view_layer.objects:
+            try:
+                for o in context.selected_objects:
+                    o.select_set(False)
+                ob.select_set(True)
+                context.view_layer.objects.active = ob
+            except RuntimeError:
+                pass
         return {'FINISHED'}
 
 

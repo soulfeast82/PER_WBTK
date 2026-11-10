@@ -436,7 +436,7 @@ class OP_GenerateBuildingShell(OP_BaseGenerator):
                     mod.angle_limit = math.radians(60)  # Only bevel edges sharper than 60°
                     mod.affect = 'EDGES'
                     mod.profile = 0.5
-                    mod.miter_outer = 'MITER_ARC'
+                    mod.miter_outer = 'MITER_SHARP'   # art law: zero rounded corners
 
         # --- Auto Trim Sheet UVs ---
         use_trim = getattr(scene, 'wbtk_use_trim_uvs', False)
