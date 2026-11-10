@@ -301,7 +301,11 @@ bm_data.py       — Block CRUD, adjacency, grid, sync. Pure library.
 bm_operators.py  — All user actions. Delegates to bm_data and bm_generate.
 bm_generate.py   — Blocks → BMesh. Preview build + full generation.
 bm_details.py    — Detail stamps: types, geometry, placement, operators.
+bm_slab.py       — Slab v0: one wall slab + SOCKET_ joints, Generate / Export Slab.
 ```
+
+**Slab v0 (2026-11-10, PROOF PASSED):** `CLAUDE_SLAB_V0_SPEC.md` → `SLAB_V0_PROOF_RESULTS.md`.
+The joints reach Unreal as sockets `L`/`R`/`U`, and a stock attach-to-socket snap lands with 0 gap / 0 turn / 0 seam.
 
 ### Block data model
 
