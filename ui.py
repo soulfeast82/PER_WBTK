@@ -127,6 +127,16 @@ class WBTK_PT_BuildMode(WBTK_PanelBase):
         scene = context.scene
 
 
+        # --- Slab v0 (CLAUDE_SLAB_V0_SPEC.md): one wall slab with its joints ---
+        # Shown with or without Build Mode on. The block flow below is untouched.
+        box_slab = layout.box()
+        box_slab.label(text="Slab v0", icon='MESH_PLANE')
+        if hasattr(scene, 'wbtk_slab_wall_type'):
+            box_slab.prop(scene, 'wbtk_slab_wall_type', text="Wall Type")
+        row_slab = box_slab.row(align=True)
+        row_slab.operator("wbtk.bm_generate_slab", text="Generate Slab", icon='MESH_CUBE')
+        row_slab.operator("wbtk.bm_export_slab", text="Export Slab", icon='EXPORT')
+
         # --- Build Mode ---
         from .bm_data import get_selected, get_all, get_data
 

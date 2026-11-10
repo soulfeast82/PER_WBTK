@@ -109,6 +109,9 @@ Unreal static-mesh import turns `SOCKET_`-prefixed child nodes into sockets name
 `blender -b --factory-startup --python tests/test_slab_v0.py`:
 
 1. Generate a WINDOW slab. Assert bounds X 0..4.0, Y −0.2..0, Z 0..3.5 (±0.0005 m), origin (0,0,0).
+   **RULED 11-10 "Keep it, 21 cm":** measured, the existing wall code's window glass is a 1 cm box
+   proud of the street face (same as today's Build Mode south walls), so the WINDOW slab is
+   Y −0.21..0. Kept; SOLID and DOOR are exactly −0.2..0.
 2. Assert three empties, each parented to the slab, at the §1 positions (±0.0005 m), rotation 0.
 3. Export Slab. Open a fresh empty scene, import the FBX with Blender's importer.
 4. Assert the same three empties came back as children of the mesh, same positions (±0.0005 m),
@@ -134,7 +137,7 @@ simple box collision (same as the DW kit sheet §2).
 - `L` at (0, 0, 0) · `R` at (400, 0, 0) · `U` at (0, 0, 350), in cm, ±0.05. A Y sign flip on
   the mesh is fine as long as all three agree with the mesh.
 - every socket rotation (0, 0, 0) ±0.01°, scale 1.
-- mesh bounds 400 × 20 × 350 cm.
+- mesh bounds 400 × 20 × 350 cm. **For the Window slab, 400 × 21 × 350** (ruled 11-10, §3).
 
 **The snap — stock Unreal only, no tool.** Place slab A at the world origin. Place slab B
 anywhere. Attach B to A at socket `R` with **Snap to Target** for location, rotation and scale.

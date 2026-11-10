@@ -818,6 +818,16 @@ class PropertyManager:
         ('wbtk_bm_preview_optout', bpy.props.BoolProperty(
             name="Build Mode Preview Opt-Out", default=False)),
 
+        # Slab v0 (CLAUDE_SLAB_V0_SPEC.md): the slab's identity. Not wbtk_wall_type,
+        # which belongs to the parametric wall generator.
+        ('wbtk_slab_wall_type', bpy.props.EnumProperty(
+            name="Slab Wall Type",
+            items=[('SOLID', "Solid", "Plain wall"),
+                   ('WINDOW', "Window", "Two 100 x 100 cm windows on the 200 cm beat"),
+                   ('DOOR', "Door", "One centred 120 x 250 cm door")],
+            default='WINDOW',
+            description="Wall type of the slab Generate Slab builds")),
+
         # === Vent / Grate Generator ===
         ('wbtk_vent_width', bpy.props.FloatProperty(
             name="Vent Width (m)", default=0.6, min=0.1, max=3.0, unit='LENGTH')),

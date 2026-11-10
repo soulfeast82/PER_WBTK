@@ -26,6 +26,8 @@ class Config:
     # --- Building Defaults ---
     WALL_THICKNESS = 0.2 * SCALE          # Scale Bible: door slab 20cm [LOCKED]
     DEFAULT_WALL_HEIGHT = 3.5 * SCALE     # Scale Bible: building floor 350cm [LOCKED] (was 3.0)
+    SLAB_BAY_WIDTH = 4.0 * SCALE          # Slab v0: one bay, census wall module 400x350
+    SLAB_COLLECTION = "WBTK_Slabs"        # Slab v0: where Generate Slab puts the slab + its joints
     WINDOW_WIDTH = 1.0 * SCALE            # Asset Bible: window insert 100x100 (was 1.5)
     WINDOW_HEIGHT = 1.0 * SCALE
     WINDOW_SILL_HEIGHT = 1.0 * SCALE

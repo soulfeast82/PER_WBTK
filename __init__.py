@@ -3,7 +3,7 @@
 bl_info = {
     "name": "World Builder Toolkit (WBTK)",
     "author": "Jermaine Dawson Peterson & AI Assistant",
-    "version": (0, 13, 0),
+    "version": (0, 14, 0),
     "blender": (5, 1, 0),
     "location": "View3D > Sidebar > World Builder",
     "description": "Generate modular walkways, structures, props, fences, ground planes, and more.",
@@ -89,6 +89,7 @@ from . import bm_data
 from . import bm_operators
 from . import bm_generate
 from . import bm_details
+from . import bm_slab   # Slab v0, CLAUDE_SLAB_V0_SPEC.md
 
 # --- Combine Classes for Registration ---
 # Gather the '_classes_to_register' tuples from each relevant module
@@ -115,6 +116,7 @@ _classes_to_register = (
     *operators_build_engine._classes_to_register,
     *bm_operators._classes,
     *bm_details._classes,
+    *bm_slab._classes,
     *ui._classes_to_register,
 )
 
