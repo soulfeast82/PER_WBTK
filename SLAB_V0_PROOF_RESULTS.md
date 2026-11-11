@@ -58,6 +58,14 @@ The level has a **Movable** DirectionalLight (technical law), a Movable SkyLight
 - Everything else in the spec sketch ran as written: `spawn_actor_from_object`, `attach_to_actor(a, 'R', R, R, R, False)`, `get_socket_location`, `get_actor_bounds(False)`.
 - Use keywords for `Rotator`: positionally it is (roll, pitch, yaw).
 
+## Follow-up 2026-11-11: the slab gets a UV map
+
+Unreal warned on the first import: "degenerate tangent bases" and "nearly zero bi-normals". The cause: the slab left Blender with **no UV map** (0 layers on 55 faces), so Unreal added an empty channel and MikkTSpace had nothing to build tangents from.
+
+- `bm_slab._box_uvs` now gives every slab one UV map, `UVMap`: 1 UV unit = 1 m, each face projected along its main axis, laid out as seen from outside. The slab is a whole 4 m wide, so a 1 m texture runs on across the seam.
+- Gate B gained UV1 (one UV map), UV2 (no face has a zero-area UV) and UV3 (both survive the FBX round trip): **39/39**.
+- Reimported over the same asset. No tangent or bi-normal warning since. Sockets, bounds and Nanite unchanged. The reimport brought a convex hull back, so collision was reset to the one box again. Gap 0, turn 0, seam 0 re-measured in `L_SlabV0_Proof`.
+
 ## Not done
 
 - The `U` socket arrived and checked, but nothing snaps to it in v0, as the spec says.

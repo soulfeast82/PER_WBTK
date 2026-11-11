@@ -72,6 +72,30 @@ def _remove_slab(slab):
         bpy.data.meshes.remove(mesh)
 
 
+def _box_uvs(bm, name="UVMap"):
+    """One UV map, 1 UV unit = 1 m, each face projected along its main axis.
+
+    Without a UV map Unreal adds an empty channel and MikkTSpace reports
+    degenerate tangents (seen 2026-11-10 on the first import). Every face is
+    laid out as seen from outside, so textures read the right way round. The
+    slab is 4 m wide, a whole number of metres, so a texture that repeats
+    every metre runs on across the seam between two snapped slabs.
+    """
+    uv = bm.loops.layers.uv.new(name)
+    for f in bm.faces:
+        nx, ny, nz = f.normal
+        ax, ay, az = abs(nx), abs(ny), abs(nz)
+        for loop in f.loops:
+            x, y, z = loop.vert.co
+            if az >= ax and az >= ay:          # top / bottom
+                u, v = x, (y if nz > 0 else -y)
+            elif ay >= ax:                      # street face (-Y) / back face (+Y)
+                u, v = (x if ny < 0 else -x), z
+            else:                               # end faces
+                u, v = (y if nx > 0 else -y), z
+            loop[uv].uv = (u, v)
+
+
 def build_slab(scene, wtype):
     """Build (or rebuild) the slab for wtype. Returns (slab, error)."""
     if wtype not in _TYPE_LABEL:
@@ -104,6 +128,7 @@ def build_slab(scene, wtype):
         # Same cleanup as every Build Mode building (OP_GenerateBuildingShell._finalize_bm).
         bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.005)
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        _box_uvs(bm)
         mesh = bpy.data.meshes.new(name)
         bm.to_mesh(mesh)
     finally:

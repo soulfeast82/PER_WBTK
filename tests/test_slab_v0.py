@@ -82,6 +82,31 @@ check("B1 bounds Y -0.21..0 (Window glass 1 cm proud, ruled 11-10)", near(by, (-
 check("B1 bounds Z 0..3.5", near(bz, (0.0, 3.5)), "%.5f..%.5f" % bz)
 check("B1 origin (0,0,0)", near(slab.matrix_world.translation, (0, 0, 0)), fmt(slab.matrix_world.translation))
 
+
+def uv_report(obj):
+    """(uv layer names, faces whose UV area is ~0 while their 3D area is not)."""
+    names = [u.name for u in obj.data.uv_layers]
+    if not names:
+        return names, None
+    uvd = obj.data.uv_layers[0].data
+    flat = 0
+    for p in obj.data.polygons:
+        pts = [uvd[i].uv for i in p.loop_indices]
+        a = 0.0
+        for i in range(len(pts)):
+            x1, y1 = pts[i]
+            x2, y2 = pts[(i + 1) % len(pts)]
+            a += x1 * y2 - x2 * y1
+        if p.area > 1e-6 and abs(a) / 2.0 < 1e-6:
+            flat += 1
+    return names, flat
+
+
+# ---------------------------------------------------------------- U1 (added 11-10: UE warned of degenerate tangents)
+uvn, uvflat = uv_report(slab)
+check("UV1 one UV map", len(uvn) == 1, str(uvn))
+check("UV2 no face has a zero-area UV", uvflat == 0, "%s flat" % uvflat)
+
 # ---------------------------------------------------------------- Gate B 2
 socks = bm_slab.slab_sockets(slab)
 check("B2 three joints L, R, U", sorted(socks) == ["L", "R", "U"], str(sorted(socks)))
@@ -156,6 +181,10 @@ def import_fresh(path):
 # ---------------------------------------------------------------- Gate B 3 + 4
 meshes, empties = import_fresh(fbx)
 check("B3 import: one mesh", len(meshes) == 1, str([m.name for m in meshes]))
+if meshes:
+    uvn, uvflat = uv_report(meshes[0])
+    check("UV3 the UV map survives the FBX round trip", len(uvn) == 1 and uvflat == 0,
+          "%s, %s flat" % (uvn, uvflat))
 check("B4 import: empties SOCKET_L, SOCKET_R, SOCKET_U",
       sorted(empties) == ["SOCKET_L", "SOCKET_R", "SOCKET_U"], str(sorted(empties)))
 if meshes:
