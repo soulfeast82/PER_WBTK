@@ -4,7 +4,7 @@ Spec: `CLAUDE_SLAB_V0_SPEC.md`. Blender 5.2.2 LTS, Unreal 5.8.4. **The joint roa
 
 ## Gate B (Blender, `tests/test_slab_v0.py`): 36/36
 
-- Window slab bounds X 0..4.0, Y -0.21..0, Z 0..3.5 m. The 21 cm depth was ruled 11-10 ("Keep it, 21 cm"): the glass sits 1 cm proud of the street face.
+- Window slab bounds X 0..4.0, Y -0.21..0, Z 0..3.5 m. The 21 cm depth was ruled 11-10 ("Keep it, 21 cm"): the glass sits 1 cm proud of the street face. *Superseded 11-11: the glass moved to the back and the slab is 20 cm deep (see the follow-up below).*
 - Solid and Door slabs are exactly 0.2 m deep.
 - Joints L (0,0,0), R (4,0,0), U (0,0,3.5) at 0° rotation. All three survive FBX export and a fresh-scene re-import unchanged.
 - `bake_space_transform=True` worked as is; the spec's one fallback knob was not needed.
@@ -46,7 +46,7 @@ The level has a **Movable** DirectionalLight (technical law), a Movable SkyLight
 - `SlabV0_canon.png`: canon camera, arm 1800, pitch −12, FOV 45. One 800 cm wall; the seam does not show.
 - `SlabV0_close.png`: at 650 cm. Four window outlines on an even beat.
 
-**Seen, not ruled:** from the street the windows barely read. The existing wall code puts the reveal on the back face, so the street side is flush glass in the same material. This needs a decision before slabs become real kit pieces.
+**Seen, not ruled:** from the street the windows barely read. The existing wall code puts the reveal on the back face, so the street side is flush glass in the same material. This needs a decision before slabs become real kit pieces. *Fixed 11-11, see the follow-up below.*
 
 ## Unreal 5.8 differences from the spec's sketch
 
@@ -65,6 +65,18 @@ Unreal warned on the first import: "degenerate tangent bases" and "nearly zero b
 - `bm_slab._box_uvs` now gives every slab one UV map, `UVMap`: 1 UV unit = 1 m, each face projected along its main axis, laid out as seen from outside. The slab is a whole 4 m wide, so a 1 m texture runs on across the seam.
 - Gate B gained UV1 (one UV map), UV2 (no face has a zero-area UV) and UV3 (both survive the FBX round trip): **39/39**.
 - Reimported over the same asset. No tangent or bi-normal warning since. Sockets, bounds and Nanite unchanged. The reimport brought a convex hull back, so collision was reset to the one box again. Gap 0, turn 0, seam 0 re-measured in `L_SlabV0_Proof`.
+
+## Follow-up 2026-11-11: the window reveal faces the street
+
+Jermaine: "Fix the window reveal so it faces the street."
+
+- Cause: the shared wall code (`geometry_buildings.build_shell_wall`) treats +Y as outside, but a slab's street face is -Y. So each window's 1 cm glass box sat proud of the street face, and the 20 cm hole opened to the back.
+- Fix, slab only: `bm_slab._glass_to_back` moves each glass box +20 cm in Y before the mesh is welded. The glass now sits at Y -0.01..0, inside the wall at the back, facing the street. Each window reads as a 19 cm deep reveal. The shared wall code and the block flow are not edited.
+- **The window slab is now exactly 20 cm deep** (Y -0.2..0), like Solid and Door. This replaces the 11-10 "Keep it, 21 cm" depth, which only existed because the glass stuck out in front.
+- Gate B: B1 now expects Y -0.2..0; new checks R1 (two glass faces at Y -0.01 facing the street) and R2 (nothing in front of the glass inside the openings). **41/41.** Run against the old code, B1, R1 and R2 fail (38/41), so the checks catch the old shape.
+- Unreal: reimported over the same asset, no warnings in the log. Bounds 400 × 20 × 350, sockets L/R/U unchanged, Nanite on, 1 UV channel. Collision reset to the one box again. Gap 0, turn 0, seam 0 re-measured in `L_SlabV0_Proof`; level saved.
+- Screenshots: `proof_refs/SlabV0_reveal_canon.png` and `SlabV0_reveal_close.png`, same cameras as before. Each window shows its jambs and head in shadow.
+- Still open: Build Mode south walls use the same shared code, so their reveals still open inward. That is block-flow code, left alone here.
 
 ## Not done
 

@@ -12,9 +12,10 @@
 #   Z 0 -> 3.5
 #   origin = back-bottom-left = the L joint
 #
-# Measured 2026-11-10 on Blender 5.2.2: the WINDOW slab's glass is a 1 cm box
-# that sits proud of the street face (Y -0.20 -> -0.21), the same as today's
-# Build Mode south walls. SOLID and DOOR fill Y -0.2 -> 0 exactly.
+# 2026-11-11: the WINDOW slab's 1 cm glass box sits at the back of the wall
+# (Y -0.01 -> 0), so each window reads from the street as a 19 cm reveal
+# (_glass_to_back). Until then the glass was proud of the street face, as on
+# today's Build Mode south walls. All three types fill Y -0.2 -> 0 exactly.
 
 import contextlib
 import os
@@ -96,6 +97,31 @@ def _box_uvs(bm, name="UVMap"):
             loop[uv].uv = (u, v)
 
 
+def _glass_to_back(bm, t):
+    """Move the window glass from the street face to the back, so the reveal faces the street.
+
+    The shared wall code (geometry_buildings.build_shell_wall, not edited here)
+    treats +Y as outside. A slab's street face is -Y, so the code put each
+    window's 1 cm glass box proud of the street face (Y -0.21 -> -0.20): flush
+    glass, with the 20 cm hole open to the back. Ruled 2026-11-11: the reveal
+    faces the street. Every glass box moves +t in Y, to Y -0.01 -> 0, inside
+    the wall at the back. From the street each window is a 19 cm deep reveal,
+    and the WINDOW slab is exactly t deep, like SOLID and DOOR.
+
+    Runs before remove_doubles, while the glass is still separate geometry: the
+    glass is every face that touches a vert in front of the street face.
+    Returns how many glass verts moved (0 = the wall code changed shape).
+    """
+    proud = -t - 0.001
+    glass = set()
+    for f in bm.faces:
+        if any(v.co.y < proud for v in f.verts):
+            glass.update(f.verts)
+    for v in glass:
+        v.co.y += t
+    return len(glass)
+
+
 def build_slab(scene, wtype):
     """Build (or rebuild) the slab for wtype. Returns (slab, error)."""
     if wtype not in _TYPE_LABEL:
@@ -125,6 +151,8 @@ def build_slab(scene, wtype):
         # the back face on Y = 0 and the street face on Y = -t.
         bm_generate._build_face_wall(bm, GeometryBuildings, 0.0, -t / 2.0, 0.0, w, h, t, 'X',
                                      wtype, door_style, door_in, door_sp)
+        if wtype == 'WINDOW' and _glass_to_back(bm, t) == 0:
+            return None, "Window slab: found no glass to move - the wall code changed shape."
         # Same cleanup as every Build Mode building (OP_GenerateBuildingShell._finalize_bm).
         bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.005)
         bmesh.ops.recalc_face_normals(bm, faces=bm.faces)

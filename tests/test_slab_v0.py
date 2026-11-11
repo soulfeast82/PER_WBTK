@@ -7,8 +7,8 @@ NOT imported by the addon. Works in a temp folder; never writes to the repo.
 Exit code 0 only when every check passes.
 
 Gate B (spec, verbatim tolerances):
-  1. WINDOW slab bounds X 0..4.0, Y -0.21..0 (ruled 11-10, glass 1 cm proud), Z 0..3.5
-     (+-0.0005 m), origin (0,0,0).
+  1. WINDOW slab bounds X 0..4.0, Y -0.2..0, Z 0..3.5 (+-0.0005 m), origin (0,0,0).
+     (Was Y -0.21..0 until 11-11, when the glass moved to the back: see R1/R2.)
   2. Three empties parented to the slab at L (0,0,0), R (4,0,0), U (0,0,3.5), rotation 0.
   3. Export Slab, open a fresh empty scene, import the FBX with Blender's importer.
   4. The three empties come back as children of the mesh, same positions (+-0.0005 m),
@@ -18,6 +18,8 @@ Extra (not in the spec's gate, for code Slab v0 added):
   E2. A second slab's joints (SOCKET_L.001 in Blender) still export as exactly SOCKET_L,
       and every name is back afterwards.
   E3. SOLID and DOOR bounds are exactly X 0..4.0, Y -0.2..0, Z 0..3.5.
+  R1. Each window has one glass face at Y -0.01 facing the street (-Y).
+  R2. Nothing sits in front of the glass inside a window opening: the reveal is open.
 """
 import math
 import os
@@ -74,10 +76,10 @@ if slab is None:
     sys.exit(1)
 (bx, by, bz) = bounds(slab)
 check("B1 bounds X 0..4.0", near(bx, (0.0, 4.0)), "%.5f..%.5f" % bx)
-# RULED 2026-11-10 "Keep it, 21 cm": the WINDOW slab keeps the existing wall code's
-# glass, a 1 cm box proud of the street face (same as today's Build Mode south
-# walls), so its depth is Y -0.21..0. SOLID and DOOR stay exactly -0.2..0 (E3).
-check("B1 bounds Y -0.21..0 (Window glass 1 cm proud, ruled 11-10)", near(by, (-0.21, 0.0)),
+# 2026-11-11 "Fix the window reveal so it faces the street": the glass moved from
+# 1 cm proud of the street face (Y -0.21..0, ruled 11-10) to the back of the wall,
+# so the WINDOW slab is now exactly -0.2..0 deep, like SOLID and DOOR (E3).
+check("B1 bounds Y -0.2..0 (glass at the back, 11-11)", near(by, (-0.2, 0.0)),
       "%.5f..%.5f" % by)
 check("B1 bounds Z 0..3.5", near(bz, (0.0, 3.5)), "%.5f..%.5f" % bz)
 check("B1 origin (0,0,0)", near(slab.matrix_world.translation, (0, 0, 0)), fmt(slab.matrix_world.translation))
@@ -101,6 +103,27 @@ def uv_report(obj):
             flat += 1
     return names, flat
 
+
+def reveal_report(obj):
+    """Faces strictly inside the two window openings (X 0.5..1.5 and 2.5..3.5, Z 1..2):
+    (glass faces at Y -0.01 facing -Y, faces in front of the glass facing +-Y)."""
+    glass, front = 0, 0
+    e = 1e-4
+    for p in obj.data.polygons:
+        c, n = p.center, p.normal
+        if not (1.0 + e < c.z < 2.0 - e and any(a + e < c.x < a + 1.0 - e for a in (0.5, 2.5))):
+            continue
+        if abs(c.y + 0.01) < TOL and n.y < -0.99:
+            glass += 1
+        elif c.y < -0.01 - TOL and abs(n.y) > 0.99:
+            front += 1
+    return glass, front
+
+
+# ---------------------------------------------------------------- R (added 11-11: the reveal faces the street)
+rg, rf = reveal_report(slab)
+check("R1 two glass faces at Y -0.01, facing the street", rg == 2, "%d" % rg)
+check("R2 nothing in front of the glass in the openings", rf == 0, "%d" % rf)
 
 # ---------------------------------------------------------------- U1 (added 11-10: UE warned of degenerate tangents)
 uvn, uvflat = uv_report(slab)
