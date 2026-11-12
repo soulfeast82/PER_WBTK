@@ -196,8 +196,12 @@ def _build_block_walls(bm, b, all_info, add_slabs, add_roof, thickness,
             _build_face_wall(bm, GB, sx, min(sy,ey), bz, abs(dy), h, thickness, 'Y',
                              wtype, door_style, door_in, door_sp, face=face)
         else:
+            # Chamfer: street side = the side of the edge facing away from the block
+            # centre (+1 = left of start->end, build_angled_wall's normal_sign units).
+            side = 1 if (rel_x * -dy + rel_y * dx) > 0 else -1
             GB.build_angled_wall(bm, (sx,sy), (ex,ey), bz, h, thickness, wtype,
-                door_style=door_style, door_inset=door_in, door_splay=door_sp)
+                door_style=door_style, door_inset=door_in, door_splay=door_sp,
+                outward_sign=side)
 
     # Roof slab
     if add_roof and not bm_data.has_block_on_top(b, all_info):

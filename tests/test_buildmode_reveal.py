@@ -65,6 +65,18 @@ _c = dict(bm_data.DEFAULT_BLOCK)
 _c.update({"w": W, "d": D, "h": H, "chamfers": [],
            "walls": {"north": "SOLID", "south": "DOOR", "east": "SOLID", "west": "DOOR"}})
 bm_data.create((DOOR_BLOCK[0], DOOR_BLOCK[1], 0.0), _c)
+# Chamfer blocks (2026-11-11): 6 x 6 m, all four corners cut 1.5 m, so each diagonal
+# wall is 2.12 m long. D: every wall WINDOW. E: every wall DOOR (recessed, inset 0.1).
+CW = 6.0
+CS = 1.5
+CHAMFER_BLOCKS = {"D": (30.0, 0.0), "E": (40.0, 0.0)}
+for _name, (x, y) in CHAMFER_BLOCKS.items():
+    _t = "WINDOW" if _name == "D" else "DOOR"
+    data = dict(bm_data.DEFAULT_BLOCK)
+    data.update({"w": CW, "d": CW, "h": H, "chamfers": ["sw", "se", "ne", "nw"],
+                 "chamfer_size": CS, "walls": {f: _t for f in ("north", "south", "east", "west")}})
+    bm_data.create((x, y, 0.0), data)
+
 scene.wbtk_building_door_style = 'RECESSED'
 scene.wbtk_building_door_inset = 0.1
 
@@ -145,6 +157,69 @@ def scan_doors(polys, where):
               "jamb offsets %s" % ["%.3f" % o for o in offs])
 
 
+def chamfer_walls(bname):
+    """(label, mid (x, y), along unit (ux, uy), outward unit (ox, oy)) per diagonal."""
+    x0, y0 = CHAMFER_BLOCKS[bname]
+    out = []
+    for corner, (cx, cy) in (("sw", (x0, y0)), ("se", (x0 + CW, y0)),
+                             ("ne", (x0 + CW, y0 + CW)), ("nw", (x0, y0 + CW))):
+        sx = 1.0 if cx > x0 else -1.0                 # corner direction from the centre
+        sy = 1.0 if cy > y0 else -1.0
+        r = 2 ** -0.5
+        mid = (cx - sx * CS / 2, cy - sy * CS / 2)
+        out.append((corner, mid, (-sy * r, sx * r), (sx * r, sy * r)))
+    return out
+
+
+def _frame(c, mid, u, o):
+    along = (c.x - mid[0]) * u[0] + (c.y - mid[1]) * u[1]
+    off = (c.x - mid[0]) * o[0] + (c.y - mid[1]) * o[1]     # + = toward the street
+    return along, off
+
+
+def scan_chamfer_windows(polys, where):
+    """G / O on each diagonal window of block D (one centred 1 x 1 m window)."""
+    for corner, mid, u, o in chamfer_walls("D"):
+        glass, street = [], []
+        for c, n in polys:
+            along, off = _frame(c, mid, u, o)
+            if not (abs(along) < WIN_W / 2 - TOL and SILL + TOL < c.z < SILL + WIN_H - TOL):
+                continue
+            facing = n.x * o[0] + n.y * o[1]
+            if abs(facing) < 0.99 or abs(off) > HALF + 0.05:
+                continue
+            if off > -TOL:
+                street.append(off)
+            else:
+                glass.append((off, facing))
+        tag = "%s D %s chamfer" % (where, corner)
+        check("G %s glass inside the wall's inner half, facing the street" % tag,
+              len(glass) >= 1 and all(-HALF + TOL < g < 0 and f > 0.99 for g, f in glass),
+              "glass offsets/facing %s" % [("%.3f" % g, "%.2f" % f) for g, f in glass])
+        check("O %s nothing on the street half" % tag,
+              not street, "street-side offsets %s" % ["%.3f" % s for s in street])
+
+
+def scan_chamfer_doors(polys, where):
+    """D on each diagonal door of block E: both jambs on the street half."""
+    dw = scene.wbtk_building_door_width
+    dh = scene.wbtk_building_door_height
+    for corner, mid, u, o in chamfer_walls("E"):
+        offs = []
+        for c, n in polys:
+            if abs(n.x * u[0] + n.y * u[1]) < 0.99 or not (0 < c.z < dh):
+                continue
+            along, off = _frame(c, mid, u, o)
+            if abs(abs(along) - dw / 2) > TOL:
+                continue
+            if abs(off) > HALF + 0.05 or abs(off) < 0.01:
+                continue
+            offs.append(off)
+        check("D %s E %s chamfer door jambs on the street half" % (where, corner),
+              len(offs) == 2 and all(0 < f < HALF for f in offs),
+              "jamb offsets %s" % ["%.3f" % f for f in offs])
+
+
 # ---------------------------------------------------------------- Generate
 master, wall = bm_generate.generate_full(scene)
 check("Generate made a wall object", wall is not None)
@@ -154,6 +229,8 @@ if wall is not None:
     polys = [(mw @ p.center, (rot @ p.normal).normalized()) for p in wall.data.polygons]
     scan(polys, "gen")
     scan_doors(polys, "gen")
+    scan_chamfer_windows(polys, "gen")
+    scan_chamfer_doors(polys, "gen")
 
 # ---------------------------------------------------------------- Live preview
 bm = bm_generate.build_preview_bm(scene)
@@ -163,6 +240,7 @@ bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
 polys = [(f.calc_center_median(), f.normal.copy()) for f in bm.faces]
 bm.free()
 scan(polys, "preview")
+scan_chamfer_windows(polys, "preview")
 # No door check here: the live preview always builds FLAT doors (no jambs).
 
 passed = sum(1 for _l, ok in results if ok)

@@ -87,7 +87,18 @@ Jermaine: "Fix the Build Mode south walls too."
 - With `outward_sign` set, the 1 cm glass box is tucked inside the wall like the slab's: glass 1 cm in from the inner face, a 19 cm reveal. Before, it stuck 1 cm into the room, and after the normal recalculation the glass faced the room on every side, including north and east. In Unreal that back face is culled, so from the street you would see through it. Now it faces the street.
 - Callers that do not pass `outward_sign` (parametric shell, its preview, the slab) keep the old maths unchanged. Slab Gate B still 41/41.
 - New `tests/test_buildmode_reveal.py`: block A at the origin and B at (10, 6), all four faces WINDOW (16 windows), checked on Generate and on the live preview; block C, recessed doors (inset 0.1) on south and west, checked on Generate (the preview builds flat doors). **67/67.** Run against the old code: 21/67.
-- Not touched: chamfer (diagonal) walls (`build_angled_wall`). Reading the code, their glass sits flush on the outer face (not measured). Not checked in Unreal: no Build Mode building is in the game repo to reimport.
+- Not touched: chamfer (diagonal) walls (`build_angled_wall`). Reading the code, their glass sits flush on the outer face (not measured). *Measured and fixed later 11-11, see below.* Not checked in Unreal: no Build Mode building is in the game repo to reimport.
+
+## Follow-up 2026-11-11: chamfer walls face the street too
+
+Jermaine: "Fix the chamfer wall windows too."
+
+- Measured on the old code: each diagonal window's glass was one face flush on the street face (offset +0.100 from the wall's centre line), with the full 20 cm hole behind it opening to the room. Recessed doors on diagonals opened toward the room (jambs at -0.050).
+- Cause: `build_angled_wall` calls the left of start->end its "outer" side. Build Mode's perimeter runs counter-clockwise, so the left side is the room.
+- Fix: `build_angled_wall` takes `outward_sign` (+1 = left of start->end, -1 = right). Build Mode (`bm_generate._build_block_walls`) passes the side facing away from the block centre. With it set, the window gets the same 1 cm glass box as the straight walls: glass 1 cm in from the inner face (19 cm reveal), facing the street. Recessed and angled door jambs open toward the street.
+- Callers that do not pass `outward_sign` (the parametric shell's corner cut and its preview) keep the old maths unchanged.
+- `tests/test_buildmode_reveal.py` gained block D (6 × 6 m, all four corners cut 1.5 m, all WINDOW) and block E (same, all DOOR, recessed inset 0.1). Diagonal glass at -0.090 facing the street, nothing on the street half, door jambs at +0.050, on Generate and the live preview (doors Generate only). **87/87.** Run against the old code: 67/87, all 20 new checks fail. Slab Gate B still 41/41.
+- Not checked in Unreal, for the same reason as above.
 
 ## Not done
 

@@ -422,10 +422,17 @@ class GeometryBuildings:
 
     @staticmethod
     def build_angled_wall(bm, start_xy, end_xy, z_start, height, thickness, wall_type='SOLID',
-                          door_style='FLAT', door_inset=0.2, door_splay=30.0):
+                          door_style='FLAT', door_inset=0.2, door_splay=30.0, outward_sign=None):
         """
         Build a wall along an arbitrary 2D line (for corner-cut diagonal walls).
         Supports SOLID, WINDOW, and DOOR wall types.
+
+        outward_sign (2026-11-11): which side is the street, in _point's normal_sign
+        units: +1 = the left of start->end, -1 = the right. Window reveals and door
+        recesses open toward it, the glass tucked 1 cm inside the wall's inner face like
+        build_shell_wall. None keeps the old maths (pane flush on the -1 face, door
+        jambs on the +1 face). Build Mode passes it, because its perimeter runs
+        counter-clockwise, so the old +1 "outer" side is the room.
         """
         from mathutils import Vector
         import math
@@ -506,7 +513,30 @@ class GeometryBuildings:
                 f_z_bot = win_z_bot + frame
                 f_z_top = win_z_top - frame
 
-                if f_end > f_start and f_z_top > f_z_bot and inset > 0:
+                if outward_sign is not None and f_end > f_start and f_z_top > f_z_bot and ht > 0:
+                    # Street-facing reveal (Build Mode, 2026-11-11): same 1 cm glass box
+                    # as build_shell_wall. Open end on the wall's inner face (welds to the
+                    # hole's rim), closed glass face 1 cm toward the street from it.
+                    o = 1.0 if outward_sign > 0 else -1.0
+                    depth = min(inset, thickness) if inset > 0 else thickness
+                    front = o * (1.0 - depth / ht)
+                    back = front + o * (0.01 / ht)
+                    try:
+                        vf = [bm.verts.new(Vector((*_point(t, front), z)))
+                              for t, z in ((f_start, f_z_bot), (f_end, f_z_bot),
+                                           (f_end, f_z_top), (f_start, f_z_top))]
+                        vb = [bm.verts.new(Vector((*_point(t, back), z)))
+                              for t, z in ((f_start, f_z_bot), (f_end, f_z_bot),
+                                           (f_end, f_z_top), (f_start, f_z_top))]
+                        bm.faces.new((vb[3], vb[2], vb[1], vb[0]))  # glass
+                        bm.faces.new((vf[0], vf[1], vb[1], vb[0]))  # bottom
+                        bm.faces.new((vf[1], vf[2], vb[2], vb[1]))  # right
+                        bm.faces.new((vf[2], vf[3], vb[3], vb[2]))  # top
+                        bm.faces.new((vf[3], vf[0], vb[0], vb[3]))  # left
+                        bm.faces.ensure_lookup_table()
+                    except Exception as e:
+                        print(f"Warning: Angled window reveal failed: {e}")
+                elif f_end > f_start and f_z_top > f_z_bot and inset > 0:
                     # Inset face sits at normal_sign offset reduced by inset
                     inset_frac = 1.0 - (inset / ht) if ht > 0 else 0.5
                     try:
@@ -545,9 +575,11 @@ class GeometryBuildings:
                 inset = door_inset
                 if door_style in ('RECESSED', 'ANGLED') and inset > 0:
                     try:
-                        inset_frac = 1.0 - (inset / ht) if ht > 0 else 0.5
+                        # o: the street side (old maths: +1). The recess opens toward it.
+                        o = 1.0 if outward_sign is None or outward_sign > 0 else -1.0
+                        inset_frac = o * (1.0 - (inset / ht)) if ht > 0 else 0.5 * o
                         # Outer jamb positions (on outer face)
-                        ol = _point(door_start, 1); or_ = _point(door_end, 1)
+                        ol = _point(door_start, o); or_ = _point(door_end, o)
                         # Inner jamb positions (recessed)
                         il = _point(door_start, inset_frac); ir = _point(door_end, inset_frac)
 
@@ -555,7 +587,7 @@ class GeometryBuildings:
                             splay_extra = inset * math.tan(math.radians(door_splay))
                             splay_start = max(0, door_start - splay_extra)
                             splay_end = min(wall_len, door_end + splay_extra)
-                            ol = _point(splay_start, 1); or_ = _point(splay_end, 1)
+                            ol = _point(splay_start, o); or_ = _point(splay_end, o)
 
                         # Left jamb
                         jl0 = bm.verts.new(Vector((*ol, z_start)))
