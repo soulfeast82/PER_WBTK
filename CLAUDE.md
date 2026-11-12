@@ -403,8 +403,9 @@ SIGN_MOUNT, ANTENNA, CANOPY.
   **Blender 5.2 API break:** Geometry Nodes modifier inputs are no longer ID
   properties. `mod["Socket_N"] = v` raises "id properties not supported for this
   type"; use `mod.properties.inputs.Socket_N.value`. `_set_modifier_input` in
-  `operators_build_engine.py` does both. `tests/test_buildify_export.py` still
-  uses the old form, so it runs on 5.1 only until ported.
+  `operators_build_engine.py` does both. `tests/test_buildify_export.py` was
+  ported 2026-11-11 (`mod_inputs` / `set_input`, both forms): 41/41 on 5.2.2,
+  Buildify instances 32/49/85/122 for 1/2/4/6 storeys, same as on 5.1.
 
 ---
 

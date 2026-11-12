@@ -1,7 +1,11 @@
 """Regression tests for the WBTK -> Buildify footprint exporter.
 
-    "C:/Program Files/Blender Foundation/Blender 5.1/blender.exe" ^
+    "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe" ^
         --background --factory-startup --python tests/test_buildify_export.py
+
+Runs on Blender 5.2 and 5.1. 5.2 moved Geometry Nodes modifier inputs off the
+modifier's ID properties (mod["Input_3"] and mod.keys() raise there), so every
+input read and write goes through mod_inputs() / set_input() below.
 
 NOT imported by the addon -- __init__.py never touches this folder, so Blender
 never loads it. Runs headless on a COPY of the bench blend; never writes to the
@@ -37,6 +41,67 @@ def check(label, cond, detail=""):
         _fails.append(label)
 
 
+def _plain(v):
+    return list(v) if hasattr(v, "__len__") and not isinstance(v, str) else v
+
+
+def _inputs_52(mod):
+    """mod.properties.inputs on 5.2+, or None on 5.1 and older."""
+    props = getattr(mod, "properties", None)
+    return getattr(props, "inputs", None) if props is not None else None
+
+
+def mod_inputs(mod):
+    """{identifier: value} for every GN modifier input, on 5.1 and 5.2.
+
+    5.2: each input is a socket at mod.properties.inputs.<identifier> with
+    .value, .type (value / attribute) and .attribute_name; all three are kept
+    so a lost attribute toggle is caught too. 5.1: the modifier's ID properties.
+    """
+    ins = _inputs_52(mod)
+    if ins is None:
+        return {k: _plain(mod[k]) for k in mod.keys()}
+    out = {}
+    for ident in dir(ins):
+        if ident.startswith("_") or ident in ("bl_rna", "rna_type", "name",
+                                              "bl_system_properties_get"):
+            continue
+        s = getattr(ins, ident)
+        if not hasattr(s, "value"):
+            continue                                   # geometry sockets
+        out[ident] = (_plain(s.value), getattr(s, "type", None),
+                      getattr(s, "attribute_name", None))
+    return out
+
+
+def set_input(mod, ident, value):
+    """Set one GN modifier input, on 5.1 and 5.2 (same rule as
+    operators_build_engine._set_modifier_input)."""
+    ins = _inputs_52(mod)
+    s = getattr(ins, ident, None) if ins is not None else None
+    if s is not None and hasattr(s, "value"):
+        s.value = value
+    else:
+        mod[ident] = value
+
+
+def input_value(mod, ident):
+    """The value of one GN modifier input, on 5.1 and 5.2."""
+    ins = _inputs_52(mod)
+    return getattr(ins, ident).value if ins is not None else mod[ident]
+
+
+def int_input_ids(mod):
+    """Identifiers of the plain int inputs (not bools, not attribute toggles)."""
+    ins = _inputs_52(mod)
+    if ins is None:
+        return [k for k in mod.keys()
+                if isinstance(mod[k], int) and not isinstance(mod[k], bool)
+                and "use_attribute" not in k]
+    return [k for k, (v, _t, _a) in mod_inputs(mod).items()
+            if isinstance(v, int) and not isinstance(v, bool)]
+
+
 def snapshot(ob):
     """Everything a re-export is contractually forbidden from changing."""
     if ob is None:
@@ -47,9 +112,7 @@ def snapshot(ob):
             "name": m.name,
             "type": m.type,
             "node_group": getattr(getattr(m, "node_group", None), "name", None),
-            "inputs": {k: (list(m[k]) if hasattr(m[k], "__len__")
-                           and not isinstance(m[k], str) else m[k])
-                       for k in m.keys()},
+            "inputs": mod_inputs(m) if m.type == 'NODES' else {},
         })
     vg = ob.vertex_groups.get(LEVELS_VGROUP)
     weights = {}
@@ -111,13 +174,17 @@ else:
               or bpy.data.node_groups.new("building_stub", "GeometryNodeTree"))
         ob.modifiers.new("Buildify", 'NODES').node_group = ng
     mod = ob.modifiers[0]
-    for k in list(mod.keys()):
-        if isinstance(mod[k], int) and not isinstance(mod[k], bool) \
-                and "use_attribute" not in k:
-            try:
-                mod[k] = 7
-            except Exception:
-                pass
+    hand_set = int_input_ids(mod)
+    for k in hand_set:
+        try:
+            set_input(mod, k, 7)
+        except Exception:
+            pass
+    # Guard against the test going vacuous: if no input took the 7, "every
+    # hand-set input preserved" below would compare defaults to defaults.
+    check("test setup: hand-set int inputs took the value 7",
+          bool(hand_set) and all(input_value(mod, k) == 7 for k in hand_set),
+          str(hand_set))
     ob["wbtk_test_sentinel"] = "do-not-lose-me"
     ob.display_type = 'WIRE'
 
@@ -253,10 +320,10 @@ bpy.ops.wbtk.export_buildify_footprints()
 bpy.data.objects[FOOTPRINT_NAME].vertex_groups.new(name="some_other_group")
 bpy.ops.wbtk.export_buildify_footprints()
 gs = [g.name for g in bpy.data.objects[FOOTPRINT_NAME].vertex_groups]
-# MEASURED on Blender 5.1: vertex groups live on the MESH datablock, so
-# clear_geometry() drops all of them. Delete-and-recreate dropped them too, so
-# this is documented behaviour rather than a regression.
-check("other groups dropped (5.1 mesh-datablock behaviour, not a regression)",
+# MEASURED on Blender 5.1, same on 5.2 (2026-11-11): vertex groups live on the
+# MESH datablock, so clear_geometry() drops all of them. Delete-and-recreate
+# dropped them too, so this is documented behaviour rather than a regression.
+check("other groups dropped (mesh-datablock behaviour, not a regression)",
       gs == [LEVELS_VGROUP], str(gs))
 check("and still no %s.001" % LEVELS_VGROUP,
       LEVELS_VGROUP + ".001" not in gs, str(gs))
@@ -358,10 +425,10 @@ else:
     # Min/Max ints at random and building:levels is ignored entirely. Module
     # size also defaults to 3.0 x 3.0, not the Scale Bible's 4.0 x 3.5. Match
     # the live configuration or this whole section measures nothing.
-    m["Input_5"] = True       # - BLOSM or ADE -            (generating mode)
-    m["Input_8"] = False      # - Randomize floor numbers - OFF
-    m["Input_3"] = 4.0        # Module width
-    m["Input_9"] = 3.5        # Module height
+    set_input(m, "Input_5", True)    # - BLOSM or ADE -            (generating mode)
+    set_input(m, "Input_8", False)   # - Randomize floor numbers - OFF
+    set_input(m, "Input_3", 4.0)     # Module width
+    set_input(m, "Input_9", 3.5)     # Module height
 
     counts = []
     for h in (3.5, 7.0, 14.0, 21.0):
