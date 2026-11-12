@@ -76,7 +76,18 @@ Jermaine: "Fix the window reveal so it faces the street."
 - Gate B: B1 now expects Y -0.2..0; new checks R1 (two glass faces at Y -0.01 facing the street) and R2 (nothing in front of the glass inside the openings). **41/41.** Run against the old code, B1, R1 and R2 fail (38/41), so the checks catch the old shape.
 - Unreal: reimported over the same asset, no warnings in the log. Bounds 400 × 20 × 350, sockets L/R/U unchanged, Nanite on, 1 UV channel. Collision reset to the one box again. Gap 0, turn 0, seam 0 re-measured in `L_SlabV0_Proof`; level saved.
 - Screenshots: `proof_refs/SlabV0_reveal_canon.png` and `SlabV0_reveal_close.png`, same cameras as before. Each window shows its jambs and head in shadow.
-- Still open: Build Mode south walls use the same shared code, so their reveals still open inward. That is block-flow code, left alone here.
+- Still open: Build Mode south walls use the same shared code, so their reveals still open inward. That is block-flow code, left alone here. *Fixed later 11-11, see below.*
+
+## Follow-up 2026-11-11: Build Mode reveals face the street too
+
+Jermaine: "Fix the Build Mode south walls too."
+
+- Cause: `build_shell_wall` guessed the street side. Axis X walls always used +Y, which is wrong for every south wall. Axis Y walls used -X only when the wall sat at world X < 0.1, which is wrong for any west wall away from the origin. Recessed and angled doors used the same guess.
+- Fix: `build_shell_wall` takes `outward_sign` (+1 / -1 along the wall's depth axis). Build Mode (`bm_generate._build_face_wall`) passes it from the block face: north/east +1, south/west -1. Window reveals and door recesses open toward it. Build Mode and its live preview both go through this.
+- With `outward_sign` set, the 1 cm glass box is tucked inside the wall like the slab's: glass 1 cm in from the inner face, a 19 cm reveal. Before, it stuck 1 cm into the room, and after the normal recalculation the glass faced the room on every side, including north and east. In Unreal that back face is culled, so from the street you would see through it. Now it faces the street.
+- Callers that do not pass `outward_sign` (parametric shell, its preview, the slab) keep the old maths unchanged. Slab Gate B still 41/41.
+- New `tests/test_buildmode_reveal.py`: block A at the origin and B at (10, 6), all four faces WINDOW (16 windows), checked on Generate and on the live preview; block C, recessed doors (inset 0.1) on south and west, checked on Generate (the preview builds flat doors). **67/67.** Run against the old code: 21/67.
+- Not touched: chamfer (diagonal) walls (`build_angled_wall`). Reading the code, their glass sits flush on the outer face (not measured). Not checked in Unreal: no Build Mode building is in the game repo to reimport.
 
 ## Not done
 

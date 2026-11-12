@@ -103,28 +103,35 @@ def generate_full(scene):
 #  INTERNALS
 # ─────────────────────────────────────────────────────────────────────────────
 
+# Street side of each block face, along the wall's depth axis (2026-11-11):
+# south/west walls face -Y/-X, north/east face +Y/+X. Window reveals and door
+# recesses open toward it.
+_FACE_OUTWARD = {"north": 1, "east": 1, "south": -1, "west": -1}
+
+
 def _build_face_wall(bm, GB, bx, by, bz, length, h, thickness, axis, wtype,
-                     door_style, door_in, door_sp):
+                     door_style, door_in, door_sp, face=None):
     """One block face. WINDOW faces auto-fit a ROW of windows — same rhythm
     rule as the parametric shell (AUTO count, min segment = window width
     + 0.8m) — instead of one centered opening."""
+    side = _FACE_OUTWARD.get(face)
     n = 1
     if wtype == 'WINDOW':
         n = max(1, int(length / (Config.WINDOW_WIDTH + 0.8)))
     if n <= 1:
         GB.build_shell_wall(bm, bx, by, bz, length, h, thickness, axis,
             wall_type=wtype, door_style=door_style, door_inset=door_in,
-            door_splay=door_sp)
+            door_splay=door_sp, outward_sign=side)
         return
     seg = length / n
     for i in range(n):
         off = i * seg
         if axis == 'X':
             GB.build_shell_wall(bm, bx + off, by, bz, seg, h, thickness, 'X',
-                                wall_type='WINDOW')
+                                wall_type='WINDOW', outward_sign=side)
         else:
             GB.build_shell_wall(bm, bx, by + off, bz, seg, h, thickness, 'Y',
-                                wall_type='WINDOW')
+                                wall_type='WINDOW', outward_sign=side)
 
 
 def _build_block_walls(bm, b, all_info, add_slabs, add_roof, thickness,
@@ -184,10 +191,10 @@ def _build_block_walls(bm, b, all_info, add_slabs, add_roof, thickness,
 
         if abs(dy) < 0.001:
             _build_face_wall(bm, GB, min(sx,ex), sy, bz, abs(dx), h, thickness, 'X',
-                             wtype, door_style, door_in, door_sp)
+                             wtype, door_style, door_in, door_sp, face=face)
         elif abs(dx) < 0.001:
             _build_face_wall(bm, GB, sx, min(sy,ey), bz, abs(dy), h, thickness, 'Y',
-                             wtype, door_style, door_in, door_sp)
+                             wtype, door_style, door_in, door_sp, face=face)
         else:
             GB.build_angled_wall(bm, (sx,sy), (ex,ey), bz, h, thickness, wtype,
                 door_style=door_style, door_inset=door_in, door_splay=door_sp)

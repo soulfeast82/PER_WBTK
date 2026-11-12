@@ -48,8 +48,20 @@ class GeometryBuildings:
     # In geometry_buildings.py -> GeometryBuildings class
 
     @staticmethod
-    def build_shell_wall(bm, base_pos_x, base_pos_y, z_start, length, height, thickness, axis, wall_type='SOLID', door_style='FLAT', door_inset=0.2, door_splay=30.0):
-    
+    def build_shell_wall(bm, base_pos_x, base_pos_y, z_start, length, height, thickness, axis, wall_type='SOLID', door_style='FLAT', door_inset=0.2, door_splay=30.0, outward_sign=None):
+        # outward_sign (2026-11-11): which side of the wall is the street, +1 or -1 along
+        # the wall's depth axis (Y for axis 'X', X for axis 'Y'). Window reveals and door
+        # recesses open toward that side. None keeps the old guess: axis 'X' = +Y always;
+        # axis 'Y' = -X only when the wall sits at world X < thickness/2. Build Mode passes
+        # it from the block face, because the old guess is wrong for every south wall and
+        # for any west wall away from the world origin.
+        def _side_sign():
+            if outward_sign is not None:
+                return 1.0 if outward_sign > 0 else -1.0
+            if axis == 'Y' and base_pos_x < thickness / 2.0:
+                return -1.0
+            return 1.0
+
         # --- Define Helper Function INSIDE build_shell_wall ---
         # (Ensure this helper is correctly indented relative to the main method)
         # It needs access to axis, base_pos_x, base_pos_y, thickness from the outer scope
@@ -146,13 +158,19 @@ class GeometryBuildings:
                 vb0_coords, vb1_coords, vb2_coords, vb3_coords = None, None, None, None
                 vf0_coords, vf1_coords, vf2_coords, vf3_coords = None, None, None, None
                 front_depth_coord = 0; back_depth_coord = 0; pane_thickness = 0.01
+                # Old guess (outward_sign None): the 1 cm glass box sticks out of the inner
+                # face into the room. With outward_sign (Build Mode, 11-11) it is tucked 1 cm
+                # INSIDE the wall instead, like the slab: nothing pokes into the room, and the
+                # recalculated glass normal faces the street, not the room.
+                _pane_dir = 1.0 if outward_sign is None else -1.0
     
                 if axis == 'X':
                     world_x_f_min = base_pos_x + xy_f_min_local; world_x_f_max = base_pos_x + xy_f_max_local
                     world_x_b_min = base_pos_x + xy_b_min_local; world_x_b_max = base_pos_x + xy_b_max_local
-                    outward_face_y = base_pos_y + half_thick
-                    front_depth_coord = outward_face_y - depth
-                    back_depth_coord = front_depth_coord - pane_thickness
+                    s = _side_sign()
+                    outward_face_y = base_pos_y + s * half_thick
+                    front_depth_coord = outward_face_y - s * depth
+                    back_depth_coord = front_depth_coord - s * pane_thickness * _pane_dir
                     vf0_coords = Vector((world_x_f_min, front_depth_coord, z_f_min)); vf1_coords = Vector((world_x_f_max, front_depth_coord, z_f_min))
                     vf2_coords = Vector((world_x_f_max, front_depth_coord, z_f_max)); vf3_coords = Vector((world_x_f_min, front_depth_coord, z_f_max))
                     vb0_coords = Vector((world_x_b_min, back_depth_coord, z_b_min)); vb1_coords = Vector((world_x_b_max, back_depth_coord, z_b_min))
@@ -160,14 +178,10 @@ class GeometryBuildings:
                 elif axis == 'Y':
                     world_y_f_min = base_pos_y + xy_f_min_local; world_y_f_max = base_pos_y + xy_f_max_local
                     world_y_b_min = base_pos_y + xy_b_min_local; world_y_b_max = base_pos_y + xy_b_max_local
-                    if base_pos_x < thickness / 2.0: # Left Wall
-                        outward_face_x = base_pos_x - half_thick
-                        front_depth_coord = outward_face_x + depth
-                        back_depth_coord = front_depth_coord + pane_thickness
-                    else: # Right Wall
-                        outward_face_x = base_pos_x + half_thick
-                        front_depth_coord = outward_face_x - depth
-                        back_depth_coord = front_depth_coord - pane_thickness
+                    s = _side_sign()   # -1 = street on -X (was "Left Wall"), +1 = +X
+                    outward_face_x = base_pos_x + s * half_thick
+                    front_depth_coord = outward_face_x - s * depth
+                    back_depth_coord = front_depth_coord - s * pane_thickness * _pane_dir
                     vf0_coords = Vector((front_depth_coord, world_y_f_min, z_f_min)); vf1_coords = Vector((front_depth_coord, world_y_f_max, z_f_min))
                     vf2_coords = Vector((front_depth_coord, world_y_f_max, z_f_max)); vf3_coords = Vector((front_depth_coord, world_y_f_min, z_f_max))
                     vb0_coords = Vector((back_depth_coord, world_y_b_min, z_b_min)); vb1_coords = Vector((back_depth_coord, world_y_b_max, z_b_min))
@@ -224,8 +238,9 @@ class GeometryBuildings:
                     # Build inset jamb + header faces connecting outer wall plane to inner plane
                     try:
                         if axis == 'X':
-                            outward_y = base_pos_y + half_thick
-                            inner_y = outward_y - depth
+                            s = _side_sign()
+                            outward_y = base_pos_y + s * half_thick
+                            inner_y = outward_y - s * depth
                             wx_l = base_pos_x + door_start_local
                             wx_r = base_pos_x + door_end_local
                             # Left jamb (4 verts, 1 face)
@@ -247,12 +262,9 @@ class GeometryBuildings:
                         elif axis == 'Y':
                             wy_l = base_pos_y + door_start_local
                             wy_r = base_pos_y + door_end_local
-                            if base_pos_x < thickness / 2.0:  # Left wall
-                                outward_x = base_pos_x - half_thick
-                                inner_x = outward_x + depth
-                            else:  # Right wall
-                                outward_x = base_pos_x + half_thick
-                                inner_x = outward_x - depth
+                            s = _side_sign()   # -1 = street on -X (was "Left wall")
+                            outward_x = base_pos_x + s * half_thick
+                            inner_x = outward_x - s * depth
                             # Left jamb
                             jl0 = bm.verts.new(Vector((outward_x, wy_l, z_start)))
                             jl1 = bm.verts.new(Vector((outward_x, wy_l, door_z_top)))
@@ -287,8 +299,9 @@ class GeometryBuildings:
 
                     try:
                         if axis == 'X':
-                            outward_y = base_pos_y + half_thick
-                            inner_y = outward_y - depth
+                            s = _side_sign()
+                            outward_y = base_pos_y + s * half_thick
+                            inner_y = outward_y - s * depth
                             # Outer corners (wider)
                             ox_l = base_pos_x + outer_start
                             ox_r = base_pos_x + outer_end
@@ -316,12 +329,9 @@ class GeometryBuildings:
                             oy_r = base_pos_y + min(length, door_end_local + splay_extra)
                             iy_l = base_pos_y + door_start_local
                             iy_r = base_pos_y + door_end_local
-                            if base_pos_x < thickness / 2.0:  # Left wall
-                                outward_x = base_pos_x - half_thick
-                                inner_x = outward_x + depth
-                            else:  # Right wall
-                                outward_x = base_pos_x + half_thick
-                                inner_x = outward_x - depth
+                            s = _side_sign()   # -1 = street on -X (was "Left wall")
+                            outward_x = base_pos_x + s * half_thick
+                            inner_x = outward_x - s * depth
                             # Left angled jamb
                             jl0 = bm.verts.new(Vector((outward_x, oy_l, z_start)))
                             jl1 = bm.verts.new(Vector((outward_x, oy_l, door_z_top)))
